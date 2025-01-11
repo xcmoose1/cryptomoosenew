@@ -1,6 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
 
-export class TelegramService {
+class TelegramService {
     constructor(botToken, channelId) {
         if (!botToken || !channelId) {
             throw new Error('TelegramService requires both botToken and channelId');
@@ -88,15 +88,11 @@ ${this.HTX_REFERRAL}
     }
 }
 
-// Create instance with environment variables (will be undefined if not loaded yet)
-export const createTelegramService = () => {
+const createTelegramService = () => {
     if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL_ID) {
         throw new Error('Missing required environment variables for Telegram service');
     }
     return new TelegramService(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHANNEL_ID);
 };
-    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL_ID) {
-        throw new Error('Missing required environment variables for Telegram service');
-    }
-    return new TelegramService(process.env.TELEGRAM_BOT_TOKEN, process.env.TELEGRAM_CHANNEL_ID);
-};
+
+export { TelegramService, createTelegramService };

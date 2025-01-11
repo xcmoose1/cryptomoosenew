@@ -443,6 +443,10 @@
             font-size: 18px;
             font-weight: 600;
             cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
             transition: all 0.3s ease;
             text-transform: uppercase;
             letter-spacing: 1px;
@@ -762,6 +766,77 @@
             line-height: 1.4;
         }
 
+        .security-metrics {
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .security-metrics h4 {
+            margin: 0 0 8px 0;
+            font-size: 14px;
+            color: #adb5bd;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .rugpull-score {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+
+        .rugpull-score .score {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .score-high {
+            color: #ff4444;
+        }
+
+        .score-medium {
+            color: #ffbb33;
+        }
+
+        .score-low {
+            color: #00C851;
+        }
+
+        .security-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .security-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .no-security-data {
+            color: #adb5bd;
+            text-align: center;
+            padding: 12px;
+            font-size: 13px;
+        }
+
+        .no-security-data i {
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+
         .social-metrics {
             margin-top: 16px;
             padding: 12px;
@@ -850,6 +925,106 @@
         }
     </style>
     <script>
+        // Security metrics configuration
+        const CORS_PROXY = 'https://corsproxy.io/?';
+
+        // Function to get security metrics
+        async function getSecurityMetrics(gem) {
+            try {
+                console.log('Getting security metrics for:', gem.symbol);
+                
+                let securityHtml = '';
+                let hasMetrics = false;
+
+                // Calculate rugpull score
+                const rugpullScore = await calculateRugpullScore(gem);
+                
+                // Start security metrics section
+                securityHtml = `
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="rugpull-score">
+                            <span>Rugpull Risk Score</span>
+                            <span class="score ${getScoreClass(rugpullScore)}">${rugpullScore}%</span>
+                        </div>
+                        <div class="security-grid">
+                `;
+
+                // Add security checks
+                const securityChecks = [
+                    { name: 'LP Locked', value: gem.lpLocked ? 'Yes' : 'No' },
+                    { name: 'Contract Verified', value: gem.contractVerified ? 'Yes' : 'No' },
+                    { name: 'Ownership Renounced', value: gem.ownershipRenounced ? 'Yes' : 'No' },
+                    { name: 'Honeypot Check', value: gem.isHoneypot ? 'Failed' : 'Passed' }
+                ];
+
+                securityChecks.forEach(check => {
+                    securityHtml += `
+                        <div class="security-item">
+                            <span>${check.name}</span>
+                            <span>${check.value}</span>
+                        </div>
+                    `;
+                });
+
+                securityHtml += `
+                        </div>
+                    </div>
+                `;
+
+                return securityHtml;
+            } catch (error) {
+                console.error('Error getting security metrics:', error);
+                return `
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="no-security-data">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            No security metrics available
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function getScoreClass(score) {
+            if (score >= 70) return 'score-high';
+            if (score >= 40) return 'score-medium';
+            return 'score-low';
+        }
+
+        async function calculateRugpullScore(gem) {
+            let score = 0;
+            let checks = 0;
+
+            // LP Lock check (25 points)
+            if (gem.lpLocked) {
+                score += 25;
+            }
+            checks++;
+
+            // Contract verification check (25 points)
+            if (gem.contractVerified) {
+                score += 25;
+            }
+            checks++;
+
+            // Ownership check (25 points)
+            if (gem.ownershipRenounced) {
+                score += 25;
+            }
+            checks++;
+
+            // Honeypot check (25 points)
+            if (!gem.isHoneypot) {
+                score += 25;
+            }
+            checks++;
+
+            // Calculate final percentage
+            return Math.round((score / (checks * 25)) * 100);
+        }
+
         // Social metrics configuration
         const CORS_PROXY = 'https://corsproxy.io/?';
 
@@ -1169,11 +1344,11 @@
                     // Get metrics for each gem
                     const gemsWithMetrics = await Promise.all(window.marketData.map(async gem => {
                         console.log('Getting metrics for:', gem.symbol);
-                        const metrics = await getSocialMetrics(gem);
+                        const metrics = await getSecurityMetrics(gem);
                         console.log('Got metrics for:', gem.symbol, metrics);
                         return {
                             ...gem,
-                            socialMetrics: metrics
+                            securityMetrics: metrics
                         };
                     }));
 
@@ -1206,9 +1381,8 @@
                                 `).join('')}
                             </div>
 
-                            <div class="social-metrics">
-                                <h4><i class="fas fa-users"></i> Social Stats</h4>
-                                ${gem.socialMetrics}
+                            <div class="security-metrics">
+                                ${gem.securityMetrics}
                             </div>
 
                             <div class="gem-highlights">
@@ -1822,13 +1996,29 @@
                         </div>
                     </div>
 
-                    <div class="social-metrics">
-                        <h4><i class="fas fa-users"></i> Social Stats</h4>
-                        <div class="social-grid">
-                            <!-- Social metrics will be dynamically added here -->
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="rugpull-score">
+                            <span>Rugpull Risk Score</span>
+                            <span class="score">0%</span>
                         </div>
-                        <div class="social-growth">
-                            <!-- Social growth will be dynamically added here -->
+                        <div class="security-grid">
+                            <div class="security-item">
+                                <span>LP Locked</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Contract Verified</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Ownership Renounced</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Honeypot Check</span>
+                                <span>Failed</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1840,10 +2030,6 @@
                                 <span>Monitoring for potential opportunities...</span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="social-links">
-                        <!-- Social links will be dynamically added here -->
                     </div>
 
                     <div class="action-buttons">
@@ -1878,13 +2064,29 @@
                         </div>
                     </div>
 
-                    <div class="social-metrics">
-                        <h4><i class="fas fa-users"></i> Social Stats</h4>
-                        <div class="social-grid">
-                            <!-- Social metrics will be dynamically added here -->
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="rugpull-score">
+                            <span>Rugpull Risk Score</span>
+                            <span class="score">0%</span>
                         </div>
-                        <div class="social-growth">
-                            <!-- Social growth will be dynamically added here -->
+                        <div class="security-grid">
+                            <div class="security-item">
+                                <span>LP Locked</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Contract Verified</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Ownership Renounced</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Honeypot Check</span>
+                                <span>Failed</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1896,10 +2098,6 @@
                                 <span>Monitoring for potential opportunities...</span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="social-links">
-                        <!-- Social links will be dynamically added here -->
                     </div>
 
                     <div class="action-buttons">
@@ -1934,13 +2132,29 @@
                         </div>
                     </div>
 
-                    <div class="social-metrics">
-                        <h4><i class="fas fa-users"></i> Social Stats</h4>
-                        <div class="social-grid">
-                            <!-- Social metrics will be dynamically added here -->
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="rugpull-score">
+                            <span>Rugpull Risk Score</span>
+                            <span class="score">0%</span>
                         </div>
-                        <div class="social-growth">
-                            <!-- Social growth will be dynamically added here -->
+                        <div class="security-grid">
+                            <div class="security-item">
+                                <span>LP Locked</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Contract Verified</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Ownership Renounced</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Honeypot Check</span>
+                                <span>Failed</span>
+                            </div>
                         </div>
                     </div>
 
@@ -1952,10 +2166,6 @@
                                 <span>Monitoring for potential opportunities...</span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="social-links">
-                        <!-- Social links will be dynamically added here -->
                     </div>
 
                     <div class="action-buttons">
@@ -1990,13 +2200,29 @@
                         </div>
                     </div>
 
-                    <div class="social-metrics">
-                        <h4><i class="fas fa-users"></i> Social Stats</h4>
-                        <div class="social-grid">
-                            <!-- Social metrics will be dynamically added here -->
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="rugpull-score">
+                            <span>Rugpull Risk Score</span>
+                            <span class="score">0%</span>
                         </div>
-                        <div class="social-growth">
-                            <!-- Social growth will be dynamically added here -->
+                        <div class="security-grid">
+                            <div class="security-item">
+                                <span>LP Locked</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Contract Verified</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Ownership Renounced</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Honeypot Check</span>
+                                <span>Failed</span>
+                            </div>
                         </div>
                     </div>
 
@@ -2008,10 +2234,6 @@
                                 <span>Monitoring for potential opportunities...</span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="social-links">
-                        <!-- Social links will be dynamically added here -->
                     </div>
 
                     <div class="action-buttons">
@@ -2046,13 +2268,29 @@
                         </div>
                     </div>
 
-                    <div class="social-metrics">
-                        <h4><i class="fas fa-users"></i> Social Stats</h4>
-                        <div class="social-grid">
-                            <!-- Social metrics will be dynamically added here -->
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="rugpull-score">
+                            <span>Rugpull Risk Score</span>
+                            <span class="score">0%</span>
                         </div>
-                        <div class="social-growth">
-                            <!-- Social growth will be dynamically added here -->
+                        <div class="security-grid">
+                            <div class="security-item">
+                                <span>LP Locked</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Contract Verified</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Ownership Renounced</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Honeypot Check</span>
+                                <span>Failed</span>
+                            </div>
                         </div>
                     </div>
 
@@ -2064,10 +2302,6 @@
                                 <span>Monitoring for potential opportunities...</span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="social-links">
-                        <!-- Social links will be dynamically added here -->
                     </div>
 
                     <div class="action-buttons">
@@ -2102,13 +2336,29 @@
                         </div>
                     </div>
 
-                    <div class="social-metrics">
-                        <h4><i class="fas fa-users"></i> Social Stats</h4>
-                        <div class="social-grid">
-                            <!-- Social metrics will be dynamically added here -->
+                    <div class="security-metrics">
+                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
+                        <div class="rugpull-score">
+                            <span>Rugpull Risk Score</span>
+                            <span class="score">0%</span>
                         </div>
-                        <div class="social-growth">
-                            <!-- Social growth will be dynamically added here -->
+                        <div class="security-grid">
+                            <div class="security-item">
+                                <span>LP Locked</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Contract Verified</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Ownership Renounced</span>
+                                <span>No</span>
+                            </div>
+                            <div class="security-item">
+                                <span>Honeypot Check</span>
+                                <span>Failed</span>
+                            </div>
                         </div>
                     </div>
 
@@ -2120,10 +2370,6 @@
                                 <span>Monitoring for potential opportunities...</span>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="social-links">
-                        <!-- Social links will be dynamically added here -->
                     </div>
 
                     <div class="action-buttons">
