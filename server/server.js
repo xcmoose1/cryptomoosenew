@@ -275,6 +275,11 @@ app.get('/api/htx/market/position', (req, res) => {
     });
 });
 
+// Health check endpoint
+app.get('/healthz', (req, res) => {
+    res.status(200).json({ status: 'healthy' });
+});
+
 // Serve static files with proper MIME types
 app.use(express.static(path.join(__dirname, '..'), {
     setHeaders: (res, path) => {

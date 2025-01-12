@@ -580,7 +580,6 @@
         .stat-box .value {
             font-size: 16px;
             font-weight: bold;
-            margin-top: 5px;
         }
 
         .stat-box .value.profit {
@@ -1026,7 +1025,6 @@
         }
 
         // Social metrics configuration
-        const CORS_PROXY = 'https://corsproxy.io/?';
 
         // Function to get social metrics
         async function getSocialMetrics(gem) {
@@ -1224,102 +1222,56 @@
                         return false;
                     }
 
-                    window.marketData = allPairs
-                        .filter(pair => {
-                            // Basic validity check
-                            if (!pair.baseToken || !pair.baseToken.address) return false;
-
+                    // Filter pairs based on our criteria
+                    const filteredPairs = await Promise.all(allPairs.map(async pair => {
+                        try {
+                            if (!pair.baseToken || !pair.baseToken.address) return null;
+                            
                             const marketCap = parseFloat(pair.fdv || 0);
+                            if (marketCap === 0 || marketCap > 10000000) return null; // Max 10M market cap
+                            
                             const liquidity = parseFloat(pair.liquidity?.usd || 0);
+                            if (liquidity < 10000) return null; // Min $10k liquidity
+                            
                             const volume24h = parseFloat(pair.volume?.h24 || 0);
-                            const volumeToMcRatio = (volume24h / marketCap) * 100;
+                            if (volume24h < 1000) return null; // Min $1k daily volume
+                            
                             const liquidityToMcRatio = (liquidity / marketCap) * 100;
 
                             // Check for rug pull indicators
-                            const rugCheck = calculateRugScore(pair);
+                            const rugCheck = await calculateRugScore(pair);
                             if (rugCheck.isLikelyRug) {
                                 console.log('Filtered out potential rug:', pair.baseToken.symbol, 'Warnings:', rugCheck.warnings);
-                                return false;
+                                return null;
                             }
 
-                            // Log token details
-                            console.log('Processing token:', {
-                                symbol: pair.baseToken.symbol,
-                                name: pair.baseToken.name,
-                                chain: pair.chainInfo.name,
-                                marketCap: marketCap,
-                                rugScore: rugCheck.score,
-                                warnings: rugCheck.warnings,
-                                links: pair.links || 'No links'
-                            });
-
-                            const isValidGem = (
-                                marketCap >= 50000 && // Min $50k market cap
-                                marketCap <= 2000000 && // Max $2M market cap (focus on micro-caps)
-                                liquidity >= 5000 && // Min $5k liquidity
-                                volumeToMcRatio >= 5 && // At least 5% daily volume/MC ratio (showing some activity)
-                                liquidityToMcRatio >= 5 && // At least 5% liquidity/MC ratio (some stability)
-                                !pair.baseToken.name?.toLowerCase().includes('test') && // Filter out test tokens
-                                !pair.baseToken.symbol?.toLowerCase().includes('test')
-                            );
-
-                            if (isValidGem) {
-                                console.log('Found valid gem:', pair.baseToken.symbol, 'on', pair.chainInfo.name);
-                            }
-
-                            return isValidGem;
-                        })
-                        .map(pair => {
-                            // Clean and validate social links
-                            const telegram = pair.links?.telegram || null;
-                            const twitter = pair.links?.twitter || null;
-                            const website = pair.links?.website || null;
-
-                            // Log each gem's social links
-                            console.log('Mapped gem social links:', {
-                                symbol: pair.baseToken.symbol,
-                                chain: pair.chainInfo.name,
-                                telegram,
-                                twitter,
-                                website
-                            });
-
+                            // Map the data to our expected format
                             return {
                                 address: pair.baseToken.address,
                                 name: pair.baseToken.name || 'Unknown',
                                 symbol: pair.baseToken.symbol || 'Unknown',
-                                chain: pair.chainInfo.id,
-                                chainName: pair.chainInfo.name,
-                                chainIcon: pair.chainInfo.icon,
-                                marketCap: parseFloat(pair.fdv || 0),
-                                volume24h: parseFloat(pair.volume?.h24 || 0),
-                                priceChange24h: parseFloat(pair.priceChange?.h24 || 0),
-                                liquidity: parseFloat(pair.liquidity?.usd || 0),
+                                chain: pair.chainId,
+                                chainName: pair.chainId,
                                 price: parseFloat(pair.priceUsd || 0),
-                                url: `https://dexscreener.com/${pair.chainInfo.id}/${pair.pairAddress}`,
-                                telegram,
-                                twitter,
-                                website,
-                                volumeToMcRatio: (parseFloat(pair.volume?.h24 || 0) / parseFloat(pair.fdv || 0)) * 100,
-                                liquidityToMcRatio: (parseFloat(pair.liquidity?.usd || 0) / parseFloat(pair.fdv || 0)) * 100
+                                priceChange24h: parseFloat(pair.priceChange?.h24 || 0),
+                                marketCap: marketCap,
+                                volume24h: volume24h,
+                                liquidity: liquidity,
+                                liquidityToMcRatio: liquidityToMcRatio,
+                                volumeToMcRatio: (volume24h / marketCap) * 100,
+                                url: `https://dexscreener.com/${pair.chainId}/${pair.pairAddress}`,
+                                telegram: pair.links?.telegram || null,
+                                twitter: pair.links?.twitter || null,
+                                website: pair.links?.website || null
                             };
-                        })
-                        .sort((a, b) => {
-                            const aScore = (a.volumeToMcRatio * 0.7) + (a.liquidityToMcRatio * 0.3);
-                            const bScore = (b.volumeToMcRatio * 0.7) + (b.liquidityToMcRatio * 0.3);
-                            return bScore - aScore;
-                        })
-                        .slice(0, 6);
+                        } catch (error) {
+                            console.error('Error processing pair:', error);
+                            return null;
+                        }
+                    }));
 
-                    console.log('Found potential gems:', window.marketData);
-
-                    if (window.marketData.length === 0) {
-                        const gemGrid = document.querySelector('.gem-grid');
-                        gemGrid.innerHTML = '<div class="loading">No potential gems found matching our criteria. Trying again...</div>';
-                        return false;
-                    }
-
-                    return true;
+                    // Remove null values and limit to top 10
+                    return filteredPairs.filter(pair => pair !== null).slice(0, 10);
                 } catch (error) {
                     console.error('Error searching for gems:', error);
                     const gemGrid = document.querySelector('.gem-grid');
@@ -1356,39 +1308,83 @@
                     // Update UI with gems
                     gemGrid.innerHTML = gemsWithMetrics.map(gem => `
                         <div class="gem-card">
-                            <div class="risk-badge" data-risk="${getRiskLevel(gem)}">
-                                ${getRiskLevel(gem).toUpperCase()} RISK
+                            <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-400">Chain</span>
+                                    <span class="text-sm text-white">${gem.chainName}</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-sm text-gray-400">Risk Level</span>
+                                    <span class="text-sm">${getRiskLevel(gem)}</span>
+                                </div>
                             </div>
                             
                             <div class="token-header">
                                 <div class="token-name">${gem.name}</div>
-                                <div class="chain-badge" data-chain="${gem.chain}">${gem.chainName}</div>
+                                <div class="token-symbol">${gem.symbol}</div>
                             </div>
 
                             <div class="price-section">
                                 <div class="current-price">$${formatPrice(gem.price)}</div>
                                 <div class="price-change ${gem.priceChange24h >= 0 ? 'positive' : 'negative'}">
-                                    ${gem.priceChange24h > 0 ? '+' : ''}${gem.priceChange24h.toFixed(2)}%
+                                    ${formatPriceChange(gem.priceChange24h)}
                                 </div>
                             </div>
 
                             <div class="metrics-grid">
-                                ${getKeyMetrics(gem).map(metric => `
-                                    <div class="metric-box">
-                                        <div class="metric-label">${metric.label}</div>
-                                        <div class="metric-value">${metric.value}</div>
+                                <div class="metric-box">
+                                    <span class="label">Market Cap</span>
+                                    <span class="value">$${formatLargeNumber(gem.marketCap)}</span>
+                                </div>
+                                <div class="metric-box">
+                                    <span class="label">24h Volume</span>
+                                    <span class="value">$${formatLargeNumber(gem.volume24h)}</span>
+                                </div>
+                                <div class="metric-box">
+                                    <span class="label">Liquidity</span>
+                                    <span class="value">$${formatLargeNumber(gem.liquidity)}</span>
+                                </div>
+                                <div class="metric-box">
+                                    <span class="label">Volume/MC</span>
+                                    <span class="value">${formatPercentage(gem.volumeToMcRatio)}</span>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                                <div class="flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium">Security Metrics</span>
+                                </div>
+                                
+                                <div class="mt-2">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-sm">Rugpull Risk Score</span>
+                                        <span id="rugpullScore" class="text-sm font-medium">0%</span>
                                     </div>
-                                `).join('')}
-                            </div>
+                                    <div class="w-full bg-gray-700 rounded-full h-2">
+                                        <div id="rugpullScoreBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
+                                    </div>
+                                </div>
 
-                            <div class="security-metrics">
-                                ${gem.securityMetrics}
-                            </div>
-
-                            <div class="gem-highlights">
-                                <h4><i class="fas fa-gem"></i> Why This Gem?</h4>
-                                <div class="highlights-content">
-                                    ${getGemHighlights(gem)}
+                                <div class="grid grid-cols-2 gap-2 mt-2">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm">LP Locked</span>
+                                        <span id="lpLocked" class="text-sm">-</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm">Contract Verified</span>
+                                        <span id="contractVerified" class="text-sm">-</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm">Ownership Renounced</span>
+                                        <span id="ownershipRenounced" class="text-sm">-</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-sm">Honeypot Check</span>
+                                        <span id="honeypotCheck" class="text-sm">-</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1402,8 +1398,6 @@
                             </div>
                         </div>
                     `).join('');
-
-                    console.log('UI updated successfully');
                 } catch (error) {
                     console.error('Error in fetchGems:', error);
                     const gemGrid = document.querySelector('.gem-grid');
@@ -1614,300 +1608,229 @@
                     }
                 });
             });
-        });
 
-        // Website analysis helper functions
-        async function analyzeWebsite(url) {
-            if (!url) return { score: 0, warnings: ['No website available'] };
+            async function fetchSecurityMetrics(tokenAddress, chain) {
+                try {
+                    // Use existing CORS_PROXY
+                    const dexResponse = await fetch(`${CORS_PROXY}https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
+                    const dexData = await dexResponse.json();
+                    
+                    const chainId = getChainId(chain);
+                    const securityResponse = await fetch(`${CORS_PROXY}https://api.gopluslabs.io/api/v1/token_security/${chainId}/${tokenAddress}`);
+                    const securityData = await securityResponse.json();
+                    
+                    updateSecurityMetrics(dexData, securityData);
+                } catch (error) {
+                    console.error('Error fetching security metrics:', error);
+                    resetSecurityMetrics();
+                }
+            }
 
-            try {
-                // Use our CORS proxy to fetch the website
-                const response = await fetch(CORS_PROXY + encodeURIComponent(url));
-                const html = await response.text();
+            function getChainId(chain) {
+                const chainMap = {
+                    'ETH': '1',
+                    'BSC': '56',
+                    'ARBITRUM': '42161',
+                    'POLYGON': '137'
+                };
+                return chainMap[chain] || '1';
+            }
+
+            function updateSecurityMetrics(dexData, securityData) {
+                const security = securityData.result || {};
+                const pair = dexData.pairs?.[0] || {};
                 
+                // Update LP Lock Status
+                const lpLocked = security.is_locked === "1";
+                document.getElementById('lpLocked').textContent = lpLocked ? 'Yes' : 'No';
+                document.getElementById('lpLocked').className = `text-sm ${lpLocked ? 'text-green-500' : 'text-red-500'}`;
+
+                // Update Contract Verification
+                const verified = security.is_contract_verified === "1";
+                document.getElementById('contractVerified').textContent = verified ? 'Yes' : 'No';
+                document.getElementById('contractVerified').className = `text-sm ${verified ? 'text-green-500' : 'text-red-500'}`;
+
+                // Update Ownership Status
+                const renounced = security.is_owner_renounced === "1";
+                document.getElementById('ownershipRenounced').textContent = renounced ? 'Yes' : 'No';
+                document.getElementById('ownershipRenounced').className = `text-sm ${renounced ? 'text-green-500' : 'text-red-500'}`;
+
+                // Update Honeypot Status
+                const isHoneypot = security.is_honeypot === "1";
+                document.getElementById('honeypotCheck').textContent = isHoneypot ? 'Failed' : 'Passed';
+                document.getElementById('honeypotCheck').className = `text-sm ${!isHoneypot ? 'text-green-500' : 'text-red-500'}`;
+
+                // Calculate and update rugpull risk score
+                const riskScore = calculateRiskScore(security);
+                document.getElementById('rugpullScore').textContent = `${riskScore}%`;
+                const scoreBar = document.getElementById('rugpullScoreBar');
+                scoreBar.style.width = `${riskScore}%`;
+                scoreBar.className = `h-2 rounded-full ${getRiskColor(riskScore)}`;
+            }
+
+            function calculateRiskScore(security) {
                 let score = 0;
+                if (security.is_locked === "1") score += 25;
+                if (security.is_contract_verified === "1") score += 25;
+                if (security.is_owner_renounced === "1") score += 25;
+                if (security.is_honeypot !== "1") score += 25;
+                return 100 - score; // Invert score so higher = riskier
+            }
+
+            function getRiskColor(score) {
+                if (score <= 25) return 'bg-green-500';
+                if (score <= 50) return 'bg-yellow-500';
+                return 'bg-red-500';
+            }
+
+            function resetSecurityMetrics() {
+                document.getElementById('lpLocked').textContent = '-';
+                document.getElementById('contractVerified').textContent = '-';
+                document.getElementById('ownershipRenounced').textContent = '-';
+                document.getElementById('honeypotCheck').textContent = '-';
+                document.getElementById('rugpullScore').textContent = '0%';
+                document.getElementById('rugpullScoreBar').style.width = '0%';
+            }
+
+            async function calculateRugScore(pair) {
+                let redFlags = 0;
                 const warnings = [];
                 
-                // Create a temporary element to parse HTML
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
+                // 1. Volume/MC ratio check
+                const volumeToMcRatio = (parseFloat(pair.volume?.h24 || 0) / parseFloat(pair.fdv || 1));
+                if (volumeToMcRatio > 3) {
+                    redFlags += 1;
+                    warnings.push('High volume/MC ratio');
+                }
+                if (volumeToMcRatio > 8) {
+                    redFlags += 2;
+                    warnings.push('Extremely high volume/MC ratio');
+                }
+
+                // 2. Price change checks
+                const priceChange24h = parseFloat(pair.priceChange?.h24 || 0);
+                if (Math.abs(priceChange24h) > 50) {
+                    redFlags += 1;
+                    warnings.push('High price volatility');
+                }
+                if (priceChange24h < -50) {
+                    redFlags += 2;
+                    warnings.push('Severe price drop');
+                }
+                if (priceChange24h > 200) {
+                    redFlags += 2;
+                    warnings.push('Suspicious price pump');
+                }
+
+                // 3. Liquidity checks
+                const liquidityRatio = (pair.liquidity?.usd || 0) / (pair.fdv || 1);
+                if (liquidityRatio < 0.05) {
+                    redFlags += 2;
+                    warnings.push('Very low liquidity ratio');
+                }
                 
-                // Check for basic website structure
-                const hasTitle = doc.title && doc.title.length > 0;
-                const hasMetaDescription = doc.querySelector('meta[name="description"]');
-                const hasMainContent = doc.querySelector('main, article, .main, #main, .content, #content');
+                // 4. Volume to liquidity ratio check
+                const volumeToLiquidityRatio = parseFloat(pair.volume?.h24 || 0) / parseFloat(pair.liquidity?.usd || 1);
+                if (volumeToLiquidityRatio > 20) {
+                    redFlags += 2;
+                    warnings.push('Suspicious volume/liquidity ratio');
+                }
+
+                // 5. Name checking
+                const suspiciousTerms = [
+                    'safe', 'moon', 'elon', 'inu', 'shib', 'doge', 'baby', 'akita',
+                    'guaranteed', 'profit', 'pump', 'rich', 'million', 'billion',
+                    'cannabis', 'nft', 'meta', 'web3', 'defi',
+                    'ethereum', 'bitcoin', 'bnb', 'arbitrum', 'polygon',
+                    'ai', 'chatgpt', 'openai', 'gpt'
+                ];
+
+                const tokenNameLower = pair.baseToken.name.toLowerCase();
+                const tokenSymbolLower = pair.baseToken.symbol.toLowerCase();
                 
-                if (!hasTitle) {
-                    warnings.push('Missing page title');
-                }
-                if (!hasMetaDescription) {
-                    warnings.push('Missing meta description');
-                }
-                if (!hasMainContent) {
-                    warnings.push('No main content structure');
-                }
-
-                // Check for key sections that legitimate projects usually have
-                const sections = {
-                    whitepaper: ['whitepaper', 'white-paper', 'white paper', 'documentation', 'docs', 'litepaper'],
-                    roadmap: ['roadmap', 'timeline', 'milestones'],
-                    team: ['team', 'about us', 'about-us', 'about', 'founders'],
-                    tokenomics: ['tokenomics', 'token distribution', 'token-distribution', 'token metrics'],
-                    useCase: ['use case', 'use-case', 'utility', 'features', 'benefits', 'solution']
-                };
-
-                // Convert HTML to lowercase text for easier searching
-                const pageText = doc.body.textContent.toLowerCase();
-
-                // Check for each section
-                for (const [section, keywords] of Object.entries(sections)) {
-                    const hasSection = keywords.some(keyword => pageText.includes(keyword));
-                    if (!hasSection) {
-                        warnings.push(`Missing ${section} section`);
-                    } else {
-                        score += 1;
-                    }
+                const matchedTerms = suspiciousTerms.filter(term => 
+                    tokenNameLower.includes(term) || tokenSymbolLower.includes(term)
+                );
+                
+                if (matchedTerms.length > 0) {
+                    redFlags += matchedTerms.length;
+                    warnings.push(`Suspicious name terms: ${matchedTerms.join(', ')}`);
                 }
 
-                // Check for social links consistency
-                const socialLinks = Array.from(doc.querySelectorAll('a[href*="twitter"], a[href*="t.me"], a[href*="telegram"], a[href*="github"]'));
-                if (socialLinks.length === 0) {
-                    warnings.push('No social links on website');
-                } else {
-                    score += 1;
+                // 6. Minimum liquidity check
+                if (parseFloat(pair.liquidity?.usd || 0) < 50000) {
+                    redFlags += 1;
+                    warnings.push('Low absolute liquidity');
                 }
-
-                // Check content quality
-                const contentLength = pageText.length;
-                if (contentLength < 1000) {
-                    warnings.push('Very little content');
-                } else if (contentLength > 2000) {
-                    score += 1;
-                }
-
-                // Check for contact information
-                const hasContact = pageText.includes('contact') || doc.querySelector('a[href^="mailto:"]');
-                if (!hasContact) {
-                    warnings.push('No contact information');
-                } else {
-                    score += 1;
-                }
-
-                // Check for SSL
-                if (!url.startsWith('https://')) {
-                    warnings.push('No SSL security');
-                } else {
-                    score += 1;
-                }
-
-                console.log('Website analysis:', {
-                    url,
-                    score,
-                    warnings,
-                    contentLength
-                });
 
                 return {
-                    score,
+                    score: redFlags,
                     warnings,
-                    hasUseCase: sections.useCase.some(keyword => pageText.includes(keyword))
-                };
-            } catch (error) {
-                console.error('Error analyzing website:', error);
-                return {
-                    score: 0,
-                    warnings: ['Failed to analyze website'],
-                    hasUseCase: false
+                    isLikelyRug: redFlags >= 4
                 };
             }
-        }
 
-        async function calculateRugScore(pair) {
-            let redFlags = 0;
-            const warnings = [];
+            // Track shown gems to avoid duplicates
+            const shownGems = new Set();
             
-            // 1. Volume/MC ratio check - stricter limits
-            const volumeToMcRatio = (parseFloat(pair.volume?.h24 || 0) / parseFloat(pair.fdv || 1));
-            if (volumeToMcRatio > 3) { // More than 300%
-                redFlags += 1;
-                warnings.push('High volume/MC ratio');
-            }
-            if (volumeToMcRatio > 8) { // More than 800%
-                redFlags += 2;
-                warnings.push('Extremely high volume/MC ratio');
-            }
+            async function formatWhyThisGem(pair) {
+                const reasons = [];
 
-            // 2. Price change checks - more nuanced
-            const priceChange24h = parseFloat(pair.priceChange?.h24 || 0);
-            if (Math.abs(priceChange24h) > 50) {
-                redFlags += 1;
-                warnings.push('High price volatility');
-            }
-            if (priceChange24h < -50) {
-                redFlags += 2;
-                warnings.push('Severe price drop');
-            }
-            if (priceChange24h > 200) {
-                redFlags += 2;
-                warnings.push('Suspicious price pump');
-            }
-
-            // 3. Liquidity checks - relative to market cap
-            const liquidityRatio = (pair.liquidity?.usd || 0) / (pair.fdv || 1);
-            if (liquidityRatio < 0.05) {
-                redFlags += 2;
-                warnings.push('Very low liquidity ratio');
-            }
-            
-            // 4. Volume to liquidity ratio check
-            const volumeToLiquidityRatio = parseFloat(pair.volume?.h24 || 0) / parseFloat(pair.liquidity?.usd || 1);
-            if (volumeToLiquidityRatio > 20) {
-                redFlags += 2;
-                warnings.push('Suspicious volume/liquidity ratio');
-            }
-
-            // 5. Enhanced name checking
-            const suspiciousTerms = [
-                // Meme terms
-                'safe', 'moon', 'elon', 'inu', 'shib', 'doge', 'baby', 'akita',
-                // Misleading terms
-                'guaranteed', 'profit', 'pump', 'rich', 'million', 'billion',
-                // Generic product terms
-                'cannabis', 'nft', 'meta', 'web3', 'defi',
-                // Chain names (when not the actual chain)
-                'ethereum', 'bitcoin', 'bnb', 'arbitrum', 'polygon',
-                // Trendy terms
-                'ai', 'chatgpt', 'openai', 'gpt'
-            ];
-
-            const tokenNameLower = pair.baseToken.name.toLowerCase();
-            const tokenSymbolLower = pair.baseToken.symbol.toLowerCase();
-            
-            const matchedTerms = suspiciousTerms.filter(term => 
-                tokenNameLower.includes(term) || tokenSymbolLower.includes(term)
-            );
-            
-            if (matchedTerms.length > 0) {
-                redFlags += matchedTerms.length;
-                warnings.push(`Suspicious name terms: ${matchedTerms.join(', ')}`);
-            }
-
-            // 6. Minimum liquidity requirement
-            if (parseFloat(pair.liquidity?.usd || 0) < 50000) { // At least $50k liquidity
-                redFlags += 1;
-                warnings.push('Low absolute liquidity');
-            }
-
-            // Log analysis
-            console.log('Token analysis:', {
-                name: pair.baseToken.name,
-                symbol: pair.baseToken.symbol,
-                price_change: priceChange24h,
-                volume_mc_ratio: volumeToMcRatio,
-                liquidity_ratio: liquidityRatio,
-                volume_liquidity_ratio: volumeToLiquidityRatio,
-                red_flags: redFlags,
-                warnings: warnings
-            });
-
-            return {
-                score: redFlags,
-                warnings,
-                isLikelyRug: redFlags >= 4 // Keep threshold at 4
-            };
-        }
-
-        // Track shown gems to avoid duplicates
-        const shownGems = new Set();
-        
-        async function formatWhyThisGem(pair) {
-            const reasons = [];
-            let websiteInfo = "No website available";
-            let useCaseInfo = "No clear use case found";
-
-            // Check website and use case if available
-            if (pair.links?.website) {
-                try {
-                    const websiteAnalysis = await analyzeWebsite(pair.links.website);
-                    if (websiteAnalysis.score >= 3) {
-                        websiteInfo = "✅ Verified website with proper documentation";
-                        if (websiteAnalysis.hasUseCase) {
-                            useCaseInfo = "✅ Clear use case: Project focuses on " + 
-                                (pair.baseToken.name.toLowerCase().includes('ai') ? 'artificial intelligence solutions' :
-                                 pair.baseToken.name.toLowerCase().includes('defi') ? 'decentralized finance' :
-                                 pair.baseToken.name.toLowerCase().includes('gaming') ? 'blockchain gaming' :
-                                 'blockchain technology');
-                        }
-                    }
-                } catch (error) {
-                    console.error('Website analysis error:', error);
+                // Market metrics
+                const volumeToMcRatio = (parseFloat(pair.volume?.h24 || 0) / parseFloat(pair.fdv || 1)) * 100;
+                const liquidityRatio = ((pair.liquidity?.usd || 0) / (pair.fdv || 1)) * 100;
+                
+                if (volumeToMcRatio > 20 && volumeToMcRatio < 300) {
+                    reasons.push(`📈 Strong trading volume (${volumeToMcRatio.toFixed(1)}% of MC)`);
                 }
+                
+                if (liquidityRatio > 5) {
+                    reasons.push(`💧 Strong liquidity ratio (${liquidityRatio.toFixed(1)}% of MC)`);
+                }
+
+                const pairAge = (new Date() - new Date(pair.pairCreatedAt)) / (1000 * 60 * 60);
+                if (pairAge < 48) {
+                    reasons.push('🌱 Early stage gem with high growth potential');
+                }
+
+                const priceChange24h = parseFloat(pair.priceChange?.h24 || 0);
+                if (priceChange24h > 10 && priceChange24h < 200) {
+                    reasons.push(`📈 Healthy price growth: +${priceChange24h.toFixed(1)}% (24h)`);
+                }
+
+                return reasons;
             }
 
-            // Market metrics
-            const volumeToMcRatio = (parseFloat(pair.volume?.h24 || 0) / parseFloat(pair.fdv || 1)) * 100;
-            const liquidityRatio = ((pair.liquidity?.usd || 0) / (pair.fdv || 1)) * 100;
-            
-            if (volumeToMcRatio > 20 && volumeToMcRatio < 300) {
-                reasons.push(`📈 Strong trading volume (${volumeToMcRatio.toFixed(1)}% of MC) indicating active market`);
-            }
-            
-            if (liquidityRatio > 5) {
-                reasons.push(`💧 Strong liquidity ratio (${liquidityRatio.toFixed(1)}% of MC) suggesting stability`);
-            }
+            async function processGemPair(pair) {
+                const gemKey = `${pair.baseToken.address}-${pair.chainId}`;
+                if (shownGems.has(gemKey)) {
+                    return null;
+                }
 
-            const pairAge = (new Date() - new Date(pair.pairCreatedAt)) / (1000 * 60 * 60);
-            if (pairAge < 48) {
-                reasons.push('🌱 Early stage gem with high growth potential (MC < $1M)');
-            }
+                const rugCheck = await calculateRugScore(pair);
+                if (rugCheck.isLikelyRug) {
+                    return null;
+                }
 
-            const priceChange24h = parseFloat(pair.priceChange?.h24 || 0);
-            if (priceChange24h > 10 && priceChange24h < 200) {
-                reasons.push(`📈 Healthy price growth: +${priceChange24h.toFixed(1)}% (24h)`);
-            }
+                const reasons = await formatWhyThisGem(pair);
+                if (reasons.length < 2) {
+                    return null;
+                }
 
-            // Add website and use case info if they're positive
-            if (websiteInfo.includes('✅')) {
-                reasons.push(`🌐 ${websiteInfo}`);
-            }
-            if (useCaseInfo.includes('✅')) {
-                reasons.push(`⚡ ${useCaseInfo}`);
+                shownGems.add(gemKey);
+
+                return {
+                    ...pair,
+                    whyThisGem: reasons
+                };
             }
 
-            return reasons;
-        }
-
-        async function processGemPair(pair) {
-            // Skip if we've already shown this gem
-            const gemKey = `${pair.baseToken.address}-${pair.chainId}`;
-            if (shownGems.has(gemKey)) {
-                return null;
-            }
-
-            const rugCheck = await calculateRugScore(pair);
-            if (rugCheck.isLikelyRug) {
-                return null;
-            }
-
-            const reasons = await formatWhyThisGem(pair);
-            if (reasons.length < 3) {
-                return null; // Skip if not enough positive indicators
-            }
-
-            // Add to shown gems
-            shownGems.add(gemKey);
-
-            return {
-                ...pair,
-                whyThisGem: reasons
-            };
-        }
-
-        // Clear shown gems periodically (every 6 hours)
-        setInterval(() => {
-            shownGems.clear();
-            console.log('Cleared shown gems cache');
-        }, 6 * 60 * 60 * 1000);
+            // Clear shown gems periodically
+            setInterval(() => {
+                shownGems.clear();
+                console.log('Cleared shown gems cache');
+            }, 6 * 60 * 60 * 1000);
+        });
     </script>
 </head>
 <body>
@@ -1976,7 +1899,16 @@
             <div class="gem-grid">
                 <!-- Card 1 -->
                 <div class="gem-card">
-                    <div class="risk-badge" data-risk="high">High Risk</div>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Chain</span>
+                            <span id="chainDisplay" class="text-sm text-white">Loading...</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Risk Level</span>
+                            <span id="riskDisplay" class="text-sm">Loading...</span>
+                        </div>
+                    </div>
                     <div class="token-header">
                         <div class="token-name">Loading...</div>
                         <div class="chain-badge">Loading...</div>
@@ -1996,28 +1928,40 @@
                         </div>
                     </div>
 
-                    <div class="security-metrics">
-                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
-                        <div class="rugpull-score">
-                            <span>Rugpull Risk Score</span>
-                            <span class="score">0%</span>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span class="text-sm font-medium">Security Metrics</span>
                         </div>
-                        <div class="security-grid">
-                            <div class="security-item">
-                                <span>LP Locked</span>
-                                <span>No</span>
+                        
+                        <div class="mt-2">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm">Rugpull Risk Score</span>
+                                <span id="rugpullScore" class="text-sm font-medium">0%</span>
                             </div>
-                            <div class="security-item">
-                                <span>Contract Verified</span>
-                                <span>No</span>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div id="rugpullScoreBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
                             </div>
-                            <div class="security-item">
-                                <span>Ownership Renounced</span>
-                                <span>No</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">LP Locked</span>
+                                <span id="lpLocked" class="text-sm">-</span>
                             </div>
-                            <div class="security-item">
-                                <span>Honeypot Check</span>
-                                <span>Failed</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Contract Verified</span>
+                                <span id="contractVerified" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Ownership Renounced</span>
+                                <span id="ownershipRenounced" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Honeypot Check</span>
+                                <span id="honeypotCheck" class="text-sm">-</span>
                             </div>
                         </div>
                     </div>
@@ -2044,7 +1988,16 @@
 
                 <!-- Card 2 -->
                 <div class="gem-card">
-                    <div class="risk-badge" data-risk="high">High Risk</div>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Chain</span>
+                            <span id="chainDisplay" class="text-sm text-white">Loading...</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Risk Level</span>
+                            <span id="riskDisplay" class="text-sm">Loading...</span>
+                        </div>
+                    </div>
                     <div class="token-header">
                         <div class="token-name">Loading...</div>
                         <div class="chain-badge">Loading...</div>
@@ -2064,28 +2017,40 @@
                         </div>
                     </div>
 
-                    <div class="security-metrics">
-                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
-                        <div class="rugpull-score">
-                            <span>Rugpull Risk Score</span>
-                            <span class="score">0%</span>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span class="text-sm font-medium">Security Metrics</span>
                         </div>
-                        <div class="security-grid">
-                            <div class="security-item">
-                                <span>LP Locked</span>
-                                <span>No</span>
+                        
+                        <div class="mt-2">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm">Rugpull Risk Score</span>
+                                <span id="rugpullScore" class="text-sm font-medium">0%</span>
                             </div>
-                            <div class="security-item">
-                                <span>Contract Verified</span>
-                                <span>No</span>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div id="rugpullScoreBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
                             </div>
-                            <div class="security-item">
-                                <span>Ownership Renounced</span>
-                                <span>No</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">LP Locked</span>
+                                <span id="lpLocked" class="text-sm">-</span>
                             </div>
-                            <div class="security-item">
-                                <span>Honeypot Check</span>
-                                <span>Failed</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Contract Verified</span>
+                                <span id="contractVerified" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Ownership Renounced</span>
+                                <span id="ownershipRenounced" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Honeypot Check</span>
+                                <span id="honeypotCheck" class="text-sm">-</span>
                             </div>
                         </div>
                     </div>
@@ -2112,7 +2077,16 @@
 
                 <!-- Card 3 -->
                 <div class="gem-card">
-                    <div class="risk-badge" data-risk="high">High Risk</div>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Chain</span>
+                            <span id="chainDisplay" class="text-sm text-white">Loading...</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Risk Level</span>
+                            <span id="riskDisplay" class="text-sm">Loading...</span>
+                        </div>
+                    </div>
                     <div class="token-header">
                         <div class="token-name">Loading...</div>
                         <div class="chain-badge">Loading...</div>
@@ -2132,28 +2106,40 @@
                         </div>
                     </div>
 
-                    <div class="security-metrics">
-                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
-                        <div class="rugpull-score">
-                            <span>Rugpull Risk Score</span>
-                            <span class="score">0%</span>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span class="text-sm font-medium">Security Metrics</span>
                         </div>
-                        <div class="security-grid">
-                            <div class="security-item">
-                                <span>LP Locked</span>
-                                <span>No</span>
+                        
+                        <div class="mt-2">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm">Rugpull Risk Score</span>
+                                <span id="rugpullScore" class="text-sm font-medium">0%</span>
                             </div>
-                            <div class="security-item">
-                                <span>Contract Verified</span>
-                                <span>No</span>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div id="rugpullScoreBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
                             </div>
-                            <div class="security-item">
-                                <span>Ownership Renounced</span>
-                                <span>No</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">LP Locked</span>
+                                <span id="lpLocked" class="text-sm">-</span>
                             </div>
-                            <div class="security-item">
-                                <span>Honeypot Check</span>
-                                <span>Failed</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Contract Verified</span>
+                                <span id="contractVerified" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Ownership Renounced</span>
+                                <span id="ownershipRenounced" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Honeypot Check</span>
+                                <span id="honeypotCheck" class="text-sm">-</span>
                             </div>
                         </div>
                     </div>
@@ -2180,7 +2166,16 @@
 
                 <!-- Card 4 -->
                 <div class="gem-card">
-                    <div class="risk-badge" data-risk="high">High Risk</div>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Chain</span>
+                            <span id="chainDisplay" class="text-sm text-white">Loading...</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Risk Level</span>
+                            <span id="riskDisplay" class="text-sm">Loading...</span>
+                        </div>
+                    </div>
                     <div class="token-header">
                         <div class="token-name">Loading...</div>
                         <div class="chain-badge">Loading...</div>
@@ -2200,28 +2195,40 @@
                         </div>
                     </div>
 
-                    <div class="security-metrics">
-                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
-                        <div class="rugpull-score">
-                            <span>Rugpull Risk Score</span>
-                            <span class="score">0%</span>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span class="text-sm font-medium">Security Metrics</span>
                         </div>
-                        <div class="security-grid">
-                            <div class="security-item">
-                                <span>LP Locked</span>
-                                <span>No</span>
+                        
+                        <div class="mt-2">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm">Rugpull Risk Score</span>
+                                <span id="rugpullScore" class="text-sm font-medium">0%</span>
                             </div>
-                            <div class="security-item">
-                                <span>Contract Verified</span>
-                                <span>No</span>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div id="rugpullScoreBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
                             </div>
-                            <div class="security-item">
-                                <span>Ownership Renounced</span>
-                                <span>No</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">LP Locked</span>
+                                <span id="lpLocked" class="text-sm">-</span>
                             </div>
-                            <div class="security-item">
-                                <span>Honeypot Check</span>
-                                <span>Failed</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Contract Verified</span>
+                                <span id="contractVerified" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Ownership Renounced</span>
+                                <span id="ownershipRenounced" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Honeypot Check</span>
+                                <span id="honeypotCheck" class="text-sm">-</span>
                             </div>
                         </div>
                     </div>
@@ -2248,7 +2255,16 @@
 
                 <!-- Card 5 -->
                 <div class="gem-card">
-                    <div class="risk-badge" data-risk="high">High Risk</div>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Chain</span>
+                            <span id="chainDisplay" class="text-sm text-white">Loading...</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Risk Level</span>
+                            <span id="riskDisplay" class="text-sm">Loading...</span>
+                        </div>
+                    </div>
                     <div class="token-header">
                         <div class="token-name">Loading...</div>
                         <div class="chain-badge">Loading...</div>
@@ -2268,28 +2284,40 @@
                         </div>
                     </div>
 
-                    <div class="security-metrics">
-                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
-                        <div class="rugpull-score">
-                            <span>Rugpull Risk Score</span>
-                            <span class="score">0%</span>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span class="text-sm font-medium">Security Metrics</span>
                         </div>
-                        <div class="security-grid">
-                            <div class="security-item">
-                                <span>LP Locked</span>
-                                <span>No</span>
+                        
+                        <div class="mt-2">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm">Rugpull Risk Score</span>
+                                <span id="rugpullScore" class="text-sm font-medium">0%</span>
                             </div>
-                            <div class="security-item">
-                                <span>Contract Verified</span>
-                                <span>No</span>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div id="rugpullScoreBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
                             </div>
-                            <div class="security-item">
-                                <span>Ownership Renounced</span>
-                                <span>No</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">LP Locked</span>
+                                <span id="lpLocked" class="text-sm">-</span>
                             </div>
-                            <div class="security-item">
-                                <span>Honeypot Check</span>
-                                <span>Failed</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Contract Verified</span>
+                                <span id="contractVerified" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Ownership Renounced</span>
+                                <span id="ownershipRenounced" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Honeypot Check</span>
+                                <span id="honeypotCheck" class="text-sm">-</span>
                             </div>
                         </div>
                     </div>
@@ -2316,7 +2344,16 @@
 
                 <!-- Card 6 -->
                 <div class="gem-card">
-                    <div class="risk-badge" data-risk="high">High Risk</div>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Chain</span>
+                            <span id="chainDisplay" class="text-sm text-white">Loading...</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-400">Risk Level</span>
+                            <span id="riskDisplay" class="text-sm">Loading...</span>
+                        </div>
+                    </div>
                     <div class="token-header">
                         <div class="token-name">Loading...</div>
                         <div class="chain-badge">Loading...</div>
@@ -2336,28 +2373,40 @@
                         </div>
                     </div>
 
-                    <div class="security-metrics">
-                        <h4><i class="fas fa-shield-alt"></i> Security Metrics</h4>
-                        <div class="rugpull-score">
-                            <span>Rugpull Risk Score</span>
-                            <span class="score">0%</span>
+                    <div class="flex flex-col gap-2 p-4 rounded-lg bg-gray-800">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                            </svg>
+                            <span class="text-sm font-medium">Security Metrics</span>
                         </div>
-                        <div class="security-grid">
-                            <div class="security-item">
-                                <span>LP Locked</span>
-                                <span>No</span>
+                        
+                        <div class="mt-2">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm">Rugpull Risk Score</span>
+                                <span id="rugpullScore" class="text-sm font-medium">0%</span>
                             </div>
-                            <div class="security-item">
-                                <span>Contract Verified</span>
-                                <span>No</span>
+                            <div class="w-full bg-gray-700 rounded-full h-2">
+                                <div id="rugpullScoreBar" class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
                             </div>
-                            <div class="security-item">
-                                <span>Ownership Renounced</span>
-                                <span>No</span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">LP Locked</span>
+                                <span id="lpLocked" class="text-sm">-</span>
                             </div>
-                            <div class="security-item">
-                                <span>Honeypot Check</span>
-                                <span>Failed</span>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Contract Verified</span>
+                                <span id="contractVerified" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Ownership Renounced</span>
+                                <span id="ownershipRenounced" class="text-sm">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm">Honeypot Check</span>
+                                <span id="honeypotCheck" class="text-sm">-</span>
                             </div>
                         </div>
                     </div>

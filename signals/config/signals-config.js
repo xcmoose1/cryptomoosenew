@@ -74,6 +74,20 @@ const SIGNALS_CONFIG = {
         DELAY_BETWEEN_REQUESTS: 100 // milliseconds
     },
 
+    // WebSocket Configuration
+    WS_CONFIG: {
+        reconnectInterval: 5000,  // Reconnect every 5 seconds
+        maxReconnectAttempts: 10,
+        pingInterval: 30000,      // Send ping every 30 seconds
+        pongTimeout: 5000         // Wait 5 seconds for pong response
+    },
+    
+    // Error handling delays
+    ERROR_HANDLING: {
+        rateLimitDelay: 60000,    // Wait 1 minute when rate limited
+        errorRetryDelay: 5000     // Wait 5 seconds on general errors
+    },
+
     // Telegram Configuration - using environment variables
     TELEGRAM: {
         BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN || '',
