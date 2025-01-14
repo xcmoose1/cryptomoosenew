@@ -7,12 +7,14 @@ import pako from 'pako';
 export class SignalsService {
     constructor() {
         this.ws = null;
-        this.signals = new Map();
-        this.subscriptions = new Map();
-        this.lastSignals = new Map();
+        this.candleHistory = new Map();
         this.indicators = new Map();
-        this.telegramBot = null;  
-        this.candleHistory = new Map(); 
+        this.lastSignals = new Map();
+        this.telegramService = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 5000;
+        this.isInitialized = false;
     }
 
     formatSymbol(symbol) {
@@ -29,109 +31,15 @@ export class SignalsService {
 
     async initialize() {
         try {
-            this.telegramBot = createTelegramService();
-            
-            await this.connectWebSocket();
+            console.log('Initializing SignalsService...');
+            this.telegramService = createTelegramService();
             await this.setupIndicators();
-            this.startMonitoring();
+            await this.setupWebSocket();
+            this.isInitialized = true;
+            console.log('SignalsService initialized successfully');
         } catch (error) {
             console.error('Failed to initialize SignalsService:', error);
             throw error;
-        }
-    }
-
-    startMonitoring() {
-        SIGNALS_CONFIG.TRADING_PAIRS.forEach(pair => {
-            this.subscriptions.set(pair, {
-                lastCheck: Date.now(),
-                indicators: new Map()
-            });
-            
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                const formattedPair = this.formatSymbol(pair);
-                const subscribeMsg = {
-                    sub: `market.${formattedPair}.kline.1min`,
-                    id: `${formattedPair}-${Date.now()}`
-                };
-                this.ws.send(JSON.stringify(subscribeMsg));
-                console.log(`Subscribed to ${formattedPair} klines`);
-            }
-        });
-
-        console.log('Started monitoring for pairs:', SIGNALS_CONFIG.TRADING_PAIRS);
-    }
-
-    async connectWebSocket() {
-        return new Promise((resolve, reject) => {
-            this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
-
-            this.ws.on('open', () => {
-                console.log('WebSocket connected to HTX');
-                resolve();
-            });
-
-            this.ws.on('message', (data) => {
-                try {
-                    // HTX sends gzipped data
-                    const text = pako.inflate(data, { to: 'string' });
-                    const message = JSON.parse(text);
-
-                    // Handle ping messages
-                    if (message.ping) {
-                        this.ws.send(JSON.stringify({
-                            pong: message.ping
-                        }));
-                        return;
-                    }
-
-                    this.handleWebSocketMessage(message);
-                } catch (err) {
-                    console.error('Failed to process message:', err);
-                }
-            });
-
-            this.ws.on('error', (error) => {
-                console.error('WebSocket error:', error);
-                reject(error);
-            });
-
-            this.ws.on('close', () => {
-                console.log('WebSocket connection closed');
-                setTimeout(() => this.connectWebSocket(), 5000); // Reconnect after 5 seconds
-            });
-        });
-    }
-
-    handleWebSocketMessage(message) {
-        try {
-            // Handle ping messages from HTX
-            if (message.ping) {
-                this.ws.send(JSON.stringify({ pong: message.ping }));
-                return;
-            }
-
-            if (message.ch && message.tick) {
-                const symbol = this.deformatSymbol(message.ch.split('.')[1]);
-                const tick = message.tick;
-                
-                if (tick) { 
-                    this.updateCandleHistory(symbol, {
-                        time: tick.id * 1000,
-                        open: parseFloat(tick.open),
-                        high: parseFloat(tick.high),
-                        low: parseFloat(tick.low),
-                        close: parseFloat(tick.close),
-                        volume: parseFloat(tick.vol),
-                        closeTime: (tick.id + 60) * 1000,
-                        isFinal: true
-                    });
-                    
-                    this.processSignals(symbol);
-                }
-            }
-        } catch (error) {
-            console.error('Error handling WebSocket message:', error);
-            console.log('Raw message:', message);
         }
     }
 
@@ -169,6 +77,101 @@ export class SignalsService {
             });
         } catch (error) {
             console.error('Error setting up indicators:', error);
+        }
+    }
+
+    async setupWebSocket() {
+        if (this.ws) {
+            console.log('Closing existing WebSocket connection...');
+            this.ws.terminate();
+            this.ws = null;
+        }
+
+        console.log('Setting up new WebSocket connection...');
+        this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
+
+        this.ws.on('open', () => {
+            console.log('WebSocket connected to HTX');
+            this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
+            
+            // Subscribe to each trading pair
+            SIGNALS_CONFIG.TRADING_PAIRS.forEach(pair => {
+                const formattedSymbol = this.formatSymbol(pair);
+                const subRequest = {
+                    sub: `market.${formattedSymbol}.kline.1min`,
+                    id: formattedSymbol
+                };
+                console.log(`Subscribing to ${formattedSymbol}...`);
+                this.ws.send(JSON.stringify(subRequest));
+            });
+        });
+
+        this.ws.on('message', async (data) => {
+            try {
+                await this.handleWebSocketMessage(data);
+            } catch (error) {
+                console.error('Error handling WebSocket message:', error);
+            }
+        });
+
+        this.ws.on('close', () => {
+            console.log('WebSocket connection closed');
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                console.log(`Reconnect attempt ${this.reconnectAttempts} of ${this.maxReconnectAttempts}`);
+                setTimeout(() => {
+                    this.setupWebSocket();
+                }, this.reconnectDelay * this.reconnectAttempts); // Exponential backoff
+            } else {
+                console.error('Max reconnection attempts reached');
+            }
+        });
+
+        this.ws.on('error', (error) => {
+            console.error('WebSocket error:', error);
+        });
+
+        // Setup ping interval
+        const pingInterval = setInterval(() => {
+            if (this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ ping: Date.now() }));
+            } else if (this.ws.readyState === WebSocket.CLOSED) {
+                clearInterval(pingInterval);
+            }
+        }, 20000);
+    }
+
+    async handleWebSocketMessage(data) {
+        try {
+            const message = JSON.parse(pako.inflate(data, { to: 'string' }));
+
+            // Handle ping/pong
+            if (message.ping) {
+                this.ws.send(JSON.stringify({ pong: message.ping }));
+                return;
+            }
+
+            if (message.ch && message.tick) {
+                const symbol = this.deformatSymbol(message.ch.split('.')[1]);
+                const candle = {
+                    time: message.tick.id * 1000,
+                    open: message.tick.open,
+                    high: message.tick.high,
+                    low: message.tick.low,
+                    close: message.tick.close,
+                    volume: message.tick.vol
+                };
+
+                this.updateCandleHistory(symbol, candle);
+                if (this.isInitialized) {
+                    await this.processSignals(symbol);
+                }
+            }
+        } catch (error) {
+            console.error('Error handling WebSocket message:', error);
+            if (error.message.includes('pako')) {
+                console.error('Data decompression error. Raw data:', data);
+            }
         }
     }
 
@@ -283,6 +286,11 @@ export class SignalsService {
     }
 
     async sendSignal(signal) {
+        if (!this.telegramService) {
+            console.error('Telegram service not initialized');
+            return;
+        }
+
         try {
             const message = `${signal.type === 'BUY' ? '🟢' : '🔴'} ${signal.type} Signal for ${signal.symbol}\n\n` +
                           `💰 Price: ${signal.price}\n` +
@@ -294,10 +302,11 @@ export class SignalsService {
                           `⏰ Time: ${signal.time}\n\n` +
                           `#${signal.symbol.replace('/', '')} #${signal.type} #Crypto`;
             
-            await this.telegramBot.sendMessage(message);
+            await this.telegramService.sendMessage(message);
             console.log(`Signal sent for ${signal.symbol}: ${signal.type}`);
         } catch (error) {
             console.error('Error sending signal:', error);
+            // Don't throw the error to prevent breaking the signal processing loop
         }
     }
 }
