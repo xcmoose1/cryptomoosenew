@@ -6,14 +6,31 @@ const SIGNALS_CONFIG = {
     
     // Trading pairs to monitor
     TRADING_PAIRS: [
+        'HBAR/USDT',
+        'TON/USDT',
         'ALGO/USDT',
         'GRT/USDT',
         'CHZ/USDT',
         'VET/USDT',
+        'MANA/USDT',
         'ZIL/USDT',
-        'HBAR/USDT',
-        'TON/USDT',
-        'GALA/USDT'
+        'IOTA/USDT',
+        'GALA/USDT',
+        'ZRX/USDT',
+        'ENJ/USDT',
+        'AUDIO/USDT',
+        'FLOW/USDT',
+        'MASK/USDT',
+        'ANKR/USDT',
+        'FTM/USDT',
+        'ARB/USDT',
+        'KAVA/USDT',
+        'ONE/USDT',
+        'CFX/USDT',
+        'SKL/USDT',
+        'SUI/USDT',
+        'UNI/USDT',
+        'BTC/USDT'
     ],
 
     // Technical Analysis Parameters
