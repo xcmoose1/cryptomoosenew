@@ -1,36 +1,19 @@
 // Signals System Configuration
 const SIGNALS_CONFIG = {
     // HTX WebSocket and REST API endpoints
-    WS_URL: 'wss://api.huobi.pro/ws',
-    REST_URL: 'https://api.huobi.pro',
+    WS_URL: 'wss://api.htx.com/ws',
+    REST_URL: 'https://api.htx.com',
     
     // Trading pairs to monitor
     TRADING_PAIRS: [
-        'HBAR/USDT',
-        'TON/USDT',
         'ALGO/USDT',
         'GRT/USDT',
         'CHZ/USDT',
         'VET/USDT',
-        'MANA/USDT',
         'ZIL/USDT',
-        'IOTA/USDT',
-        'GALA/USDT',
-        'ZRX/USDT',
-        'ENJ/USDT',
-        'AUDIO/USDT',
-        'FLOW/USDT',
-        'MASK/USDT',
-        'ANKR/USDT',
-        'FTM/USDT',
-        'ARB/USDT',
-        'KAVA/USDT',
-        'ONE/USDT',
-        'CFX/USDT',
-        'SKL/USDT',
-        'SUI/USDT',
-        'UNI/USDT',
-        'BTC/USDT'
+        'HBAR/USDT',
+        'TON/USDT',
+        'GALA/USDT'
     ],
 
     // Technical Analysis Parameters

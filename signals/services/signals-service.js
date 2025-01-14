@@ -15,6 +15,18 @@ export class SignalsService {
         this.candleHistory = new Map(); 
     }
 
+    formatSymbol(symbol) {
+        // Remove slash for WebSocket subscription
+        return symbol.replace('/', '').toLowerCase();
+    }
+
+    deformatSymbol(symbol) {
+        // Add slash back for indicator tracking
+        const base = symbol.slice(0, -4).toUpperCase();
+        const quote = symbol.slice(-4).toUpperCase();
+        return `${base}/${quote}`;
+    }
+
     async initialize() {
         try {
             this.telegramBot = createTelegramService();
@@ -36,8 +48,7 @@ export class SignalsService {
             });
             
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                // Convert pair format (e.g., 'BTC/USDT' to 'btcusdt')
-                const formattedPair = pair.replace('/', '').toLowerCase();
+                const formattedPair = this.formatSymbol(pair);
                 const subscribeMsg = {
                     sub: `market.${formattedPair}.kline.1min`,
                     id: `${formattedPair}-${Date.now()}`
@@ -100,11 +111,11 @@ export class SignalsService {
             }
 
             if (message.ch && message.tick) {
-                const [_, symbol, __, period] = message.ch.split('.');
+                const symbol = this.deformatSymbol(message.ch.split('.')[1]);
                 const tick = message.tick;
                 
                 if (tick) { 
-                    this.updateCandleHistory(symbol.toUpperCase(), {
+                    this.updateCandleHistory(symbol, {
                         time: tick.id * 1000,
                         open: parseFloat(tick.open),
                         high: parseFloat(tick.high),
@@ -115,7 +126,7 @@ export class SignalsService {
                         isFinal: true
                     });
                     
-                    this.processSignals(symbol.toUpperCase());
+                    this.processSignals(symbol);
                 }
             }
         } catch (error) {
