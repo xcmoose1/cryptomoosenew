@@ -125,22 +125,40 @@ export class SignalsService {
     }
 
     async setupIndicators() {
-        SIGNALS_CONFIG.TRADING_PAIRS.forEach(pair => {
-            this.indicators.set(pair, {
-                rsi: new RSI({ period: 14, values: [] }),
-                macd: new MACD({
-                    fastPeriod: 12,
-                    slowPeriod: 26,
-                    signalPeriod: 9,
-                    SimpleMAOscillator: false,
-                    SimpleMASignal: false,
-                    values: []
-                }),
-                emaFast: new EMA({ period: 9, values: [] }),
-                emaSlow: new EMA({ period: 21, values: [] }),
-                volumeMA: new SMA({ period: 20, values: [] })
+        try {
+            SIGNALS_CONFIG.TRADING_PAIRS.forEach(pair => {
+                // Initialize with empty arrays first
+                const indicators = {
+                    rsi: new RSI({ period: 14, values: [] }),
+                    emaFast: new EMA({ period: 9, values: [] }),
+                    emaSlow: new EMA({ period: 21, values: [] }),
+                    volumeMA: new SMA({ period: 20, values: [] })
+                };
+                
+                // Get existing history if available
+                const history = this.candleHistory.get(pair);
+                if (history && history.length > 0) {
+                    const closes = history.map(c => c.close);
+                    const volumes = history.map(c => c.volume);
+                    
+                    // Pre-calculate indicators with existing data
+                    closes.forEach(price => {
+                        indicators.rsi.nextValue(price);
+                        indicators.emaFast.nextValue(price);
+                        indicators.emaSlow.nextValue(price);
+                    });
+                    
+                    volumes.forEach(vol => {
+                        indicators.volumeMA.nextValue(vol);
+                    });
+                }
+                
+                this.indicators.set(pair, indicators);
+                console.log(`Indicators initialized for ${pair}`);
             });
-        });
+        } catch (error) {
+            console.error('Error setting up indicators:', error);
+        }
     }
 
     updateCandleHistory(symbol, candle) {
@@ -165,16 +183,33 @@ export class SignalsService {
         const volumes = history.map(c => c.volume);
         
         const indicators = this.indicators.get(symbol);
-        
+        if (!indicators) {
+            console.log(`Initializing indicators for ${symbol}`);
+            await this.setupIndicators();
+            return;
+        }
+
         // Calculate indicators
         const rsi = indicators.rsi.nextValue(closes[closes.length - 1]);
         const emaFast = indicators.emaFast.nextValue(closes[closes.length - 1]);
         const emaSlow = indicators.emaSlow.nextValue(closes[closes.length - 1]);
         const volumeMA = indicators.volumeMA.nextValue(volumes[volumes.length - 1]);
         
+        // Skip if any indicator returns undefined (not enough data yet)
+        if (!rsi || !emaFast || !emaSlow || !volumeMA) {
+            console.log(`Waiting for enough data for ${symbol}`);
+            return;
+        }
+        
         // Get previous values for crossover detection
         const prevEmaFast = indicators.emaFast.result[indicators.emaFast.result.length - 2];
         const prevEmaSlow = indicators.emaSlow.result[indicators.emaSlow.result.length - 2];
+        
+        // Skip if we don't have previous values yet
+        if (!prevEmaFast || !prevEmaSlow) {
+            console.log(`Waiting for previous EMA values for ${symbol}`);
+            return;
+        }
         
         // Current values
         const currentClose = closes[closes.length - 1];
