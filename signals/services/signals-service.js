@@ -102,38 +102,73 @@ export class SignalsService {
     async setupIndicators() {
         try {
             SIGNALS_CONFIG.TRADING_PAIRS.forEach(pair => {
-                // Initialize with empty arrays first
-                const indicators = {
-                    rsi: new RSI({ period: 14, values: [] }),
-                    emaFast: new EMA({ period: 9, values: [] }),
-                    emaSlow: new EMA({ period: 21, values: [] }),
-                    volumeMA: new SMA({ period: 20, values: [] })
-                };
-                
-                // Get existing history if available
                 const history = this.candleHistory.get(pair);
-                if (history && history.length > 0) {
-                    const closes = history.map(c => c.close);
-                    const volumes = history.map(c => c.volume);
-                    
-                    // Pre-calculate indicators with existing data
-                    closes.forEach(price => {
-                        indicators.rsi.nextValue(price);
-                        indicators.emaFast.nextValue(price);
-                        indicators.emaSlow.nextValue(price);
-                    });
-                    
-                    volumes.forEach(vol => {
-                        indicators.volumeMA.nextValue(vol);
-                    });
+                if (!history || history.length === 0) {
+                    console.log(`No historical data available for ${pair}, skipping indicator initialization`);
+                    return;
                 }
-                
+
+                const closes = history.map(c => c.close);
+                const volumes = history.map(c => c.volume);
+
+                // Check if we have enough data points
+                const requiredDataPoints = Math.max(
+                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD
+                );
+
+                if (closes.length < requiredDataPoints) {
+                    console.log(`Insufficient data points for ${pair}. Have ${closes.length}, need ${requiredDataPoints}`);
+                    return;
+                }
+
+                // Initialize indicators with the complete historical data
+                const indicators = {
+                    rsi: new RSI({ 
+                        period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+                        values: closes
+                    }),
+                    emaFast: new EMA({ 
+                        period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
+                        values: closes
+                    }),
+                    emaSlow: new EMA({ 
+                        period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+                        values: closes
+                    }),
+                    volumeMA: new SMA({ 
+                        period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
+                        values: volumes
+                    })
+                };
+
+                // Store the initialized indicators
                 this.indicators.set(pair, indicators);
-                console.log(`Indicators initialized for ${pair}`);
+                console.log(`Indicators successfully initialized for ${pair} with ${closes.length} data points`);
             });
         } catch (error) {
             console.error('Error setting up indicators:', error);
+            throw error; // Propagate the error to handle it in the initialization
         }
+    }
+
+    isIndicatorReady(pair) {
+        const indicators = this.indicators.get(pair);
+        if (!indicators) return false;
+
+        // Check if all indicators have valid values
+        const lastRSI = indicators.rsi.getResult();
+        const lastEMAFast = indicators.emaFast.getResult();
+        const lastEMASlow = indicators.emaSlow.getResult();
+        const lastVolumeMA = indicators.volumeMA.getResult();
+
+        return (
+            Array.isArray(lastRSI) && lastRSI.length > 0 &&
+            Array.isArray(lastEMAFast) && lastEMAFast.length > 0 &&
+            Array.isArray(lastEMASlow) && lastEMASlow.length > 0 &&
+            Array.isArray(lastVolumeMA) && lastVolumeMA.length > 0
+        );
     }
 
     async setupWebSocket() {
@@ -246,98 +281,104 @@ export class SignalsService {
     }
 
     async processSignals(symbol) {
-        const history = this.candleHistory.get(symbol);
-        if (!history || history.length < 30) return;
-
-        const closes = history.map(c => c.close);
-        const volumes = history.map(c => c.volume);
-        
-        const indicators = this.indicators.get(symbol);
-        if (!indicators) {
-            console.log(`Initializing indicators for ${symbol}`);
-            await this.setupIndicators();
-            return;
-        }
-
-        // Calculate indicators
-        const rsi = indicators.rsi.nextValue(closes[closes.length - 1]);
-        const emaFast = indicators.emaFast.nextValue(closes[closes.length - 1]);
-        const emaSlow = indicators.emaSlow.nextValue(closes[closes.length - 1]);
-        const volumeMA = indicators.volumeMA.nextValue(volumes[volumes.length - 1]);
-        
-        // Skip if any indicator returns undefined (not enough data yet)
-        if (!rsi || !emaFast || !emaSlow || !volumeMA) {
-            console.log(`Waiting for enough data for ${symbol}`);
-            return;
-        }
-        
-        // Get previous values for crossover detection
-        const prevEmaFast = indicators.emaFast.result[indicators.emaFast.result.length - 2];
-        const prevEmaSlow = indicators.emaSlow.result[indicators.emaSlow.result.length - 2];
-        
-        // Skip if we don't have previous values yet
-        if (!prevEmaFast || !prevEmaSlow) {
-            console.log(`Waiting for previous EMA values for ${symbol}`);
-            return;
-        }
-        
-        // Current values
-        const currentClose = closes[closes.length - 1];
-        const currentVolume = volumes[volumes.length - 1];
-        
-        // Calculate volume ratio
-        const volumeRatio = currentVolume / volumeMA;
-        
-        let signal = null;
-        
-        // BUY Signal Conditions
-        if (
-            prevEmaFast < prevEmaSlow && // Previous state
-            emaFast > emaSlow && // Current crossover
-            rsi < 70 && // Not overbought
-            volumeRatio > 1.5 // Volume confirmation
-        ) {
-            signal = {
-                type: 'BUY',
-                symbol,
-                price: currentClose,
-                rsi,
-                emaFast,
-                emaSlow,
-                volumeRatio: volumeRatio.toFixed(2),
-                time: new Date().toISOString()
-            };
-        }
-        // SELL Signal Conditions
-        else if (
-            prevEmaFast > prevEmaSlow && // Previous state
-            emaFast < emaSlow && // Current crossover
-            rsi > 30 && // Not oversold
-            volumeRatio > 1.5 // Volume confirmation
-        ) {
-            signal = {
-                type: 'SELL',
-                symbol,
-                price: currentClose,
-                rsi,
-                emaFast,
-                emaSlow,
-                volumeRatio: volumeRatio.toFixed(2),
-                time: new Date().toISOString()
-            };
-        }
-
-        if (signal) {
-            const lastSignal = this.lastSignals.get(symbol);
-            // Check 1-hour cooldown and maximum concurrent trades
-            if (!lastSignal || Date.now() - lastSignal.time > 3600000) {
-                this.lastSignals.set(symbol, { 
-                    type: signal.type, 
-                    time: Date.now(),
-                    price: currentClose
-                });
-                await this.sendSignal(signal);
+        try {
+            if (!this.isIndicatorReady(symbol)) {
+                console.log(`Waiting for previous EMA values for ${symbol}`);
+                return;
             }
+
+            const indicators = this.indicators.get(symbol);
+            if (!indicators) {
+                console.error(`No indicators found for ${symbol}`);
+                return;
+            }
+
+            // Get the latest indicator values
+            const rsi = indicators.rsi.getResult().slice(-1)[0];
+            const emaFast = indicators.emaFast.getResult().slice(-1)[0];
+            const emaSlow = indicators.emaSlow.getResult().slice(-1)[0];
+            const volumeMA = indicators.volumeMA.getResult().slice(-1)[0];
+
+            const history = this.candleHistory.get(symbol);
+            const closes = history.map(c => c.close);
+            const volumes = history.map(c => c.volume);
+
+            // Calculate indicators
+            indicators.rsi.nextValue(closes[closes.length - 1]);
+            indicators.emaFast.nextValue(closes[closes.length - 1]);
+            indicators.emaSlow.nextValue(closes[closes.length - 1]);
+            indicators.volumeMA.nextValue(volumes[volumes.length - 1]);
+
+            // Get previous values for crossover detection
+            const prevEmaFast = indicators.emaFast.result[indicators.emaFast.result.length - 2];
+            const prevEmaSlow = indicators.emaSlow.result[indicators.emaSlow.result.length - 2];
+            
+            // Skip if we don't have previous values yet
+            if (!prevEmaFast || !prevEmaSlow) {
+                console.log(`Waiting for previous EMA values for ${symbol}`);
+                return;
+            }
+            
+            // Current values
+            const currentClose = closes[closes.length - 1];
+            const currentVolume = volumes[volumes.length - 1];
+            
+            // Calculate volume ratio
+            const volumeRatio = currentVolume / volumeMA;
+            
+            let signal = null;
+            
+            // BUY Signal Conditions
+            if (
+                prevEmaFast < prevEmaSlow && // Previous state
+                emaFast > emaSlow && // Current crossover
+                rsi < 70 && // Not overbought
+                volumeRatio > 1.5 // Volume confirmation
+            ) {
+                signal = {
+                    type: 'BUY',
+                    symbol,
+                    price: currentClose,
+                    rsi,
+                    emaFast,
+                    emaSlow,
+                    volumeRatio: volumeRatio.toFixed(2),
+                    time: new Date().toISOString()
+                };
+            }
+            // SELL Signal Conditions
+            else if (
+                prevEmaFast > prevEmaSlow && // Previous state
+                emaFast < emaSlow && // Current crossover
+                rsi > 30 && // Not oversold
+                volumeRatio > 1.5 // Volume confirmation
+            ) {
+                signal = {
+                    type: 'SELL',
+                    symbol,
+                    price: currentClose,
+                    rsi,
+                    emaFast,
+                    emaSlow,
+                    volumeRatio: volumeRatio.toFixed(2),
+                    time: new Date().toISOString()
+                };
+            }
+
+            if (signal) {
+                const lastSignal = this.lastSignals.get(symbol);
+                // Check 1-hour cooldown and maximum concurrent trades
+                if (!lastSignal || Date.now() - lastSignal.time > 3600000) {
+                    this.lastSignals.set(symbol, { 
+                        type: signal.type, 
+                        time: Date.now(),
+                        price: currentClose
+                    });
+                    await this.sendSignal(signal);
+                }
+            }
+        } catch (error) {
+            console.error('Error processing signals:', error);
         }
     }
 
