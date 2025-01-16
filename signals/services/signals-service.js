@@ -15,6 +15,9 @@ export class SignalsService {
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 5000;
         this.isInitialized = false;
+        this.lastStatusUpdate = Date.now();
+        this.statusUpdateInterval = 5 * 60 * 1000; // 5 minutes
+        this.processedCandles = 0;
     }
 
     formatSymbol(symbol) {
@@ -73,11 +76,14 @@ export class SignalsService {
 
     async initialize() {
         try {
-            console.log('Initializing SignalsService...');
+            console.log('\n=== Initializing SignalsService ===');
             this.telegramService = createTelegramService();
             
+            // Start status updates
+            this.startStatusUpdates();
+            
             // Fetch historical data for all pairs
-            console.log('Fetching historical data for all pairs...');
+            console.log('\n📊 Fetching historical data for all pairs...');
             const historyPromises = SIGNALS_CONFIG.TRADING_PAIRS.map(pair => 
                 this.fetchHistoricalData(pair, Math.max(
                     SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
@@ -87,16 +93,65 @@ export class SignalsService {
             );
             
             await Promise.all(historyPromises);
-            console.log('Historical data fetched for all pairs');
+            console.log('✅ Historical data fetched for all pairs');
             
             await this.setupIndicators();
             await this.setupWebSocket();
             this.isInitialized = true;
-            console.log('SignalsService initialized successfully');
+            console.log('\n🚀 SignalsService initialized successfully\n');
+            
+            // Send initial status update
+            this.printSystemStatus();
         } catch (error) {
-            console.error('Failed to initialize SignalsService:', error);
+            console.error('❌ Failed to initialize SignalsService:', error);
             throw error;
         }
+    }
+
+    startStatusUpdates() {
+        setInterval(() => {
+            this.printSystemStatus();
+        }, this.statusUpdateInterval);
+    }
+
+    printSystemStatus() {
+        const now = new Date().toISOString();
+        const uptime = Math.floor((Date.now() - this.lastStatusUpdate) / 1000);
+        const activeSymbols = Array.from(this.indicators.keys());
+        
+        console.log('\n=== System Status Update ===');
+        console.log(`🕒 Time: ${now}`);
+        console.log(`⚡ System Status: ${this.isInitialized ? 'Active' : 'Initializing'}`);
+        console.log(`📈 Monitoring: ${activeSymbols.length} pairs`);
+        console.log(`🔄 Processed Candles: ${this.processedCandles}`);
+        console.log(`⏱️ Uptime: ${uptime} seconds`);
+        console.log(`\n🎯 Active Trading Pairs:`);
+        activeSymbols.forEach(symbol => {
+            const indicators = this.indicators.get(symbol);
+            const lastSignal = this.lastSignals.get(symbol);
+            console.log(`   ${symbol}: ${lastSignal ? `Last signal: ${lastSignal.type} @ ${new Date(lastSignal.time).toISOString()}` : 'No signals yet'}`);
+        });
+        console.log('\n=== End Status Update ===\n');
+        
+        this.lastStatusUpdate = Date.now();
+    }
+
+    isIndicatorReady(pair) {
+        const indicators = this.indicators.get(pair);
+        if (!indicators) return false;
+
+        // Check if all indicators have valid values
+        const lastRSI = indicators.rsi.getResult();
+        const lastEMAFast = indicators.emaFast.getResult();
+        const lastEMASlow = indicators.emaSlow.getResult();
+        const lastVolumeMA = indicators.volumeMA.getResult();
+
+        return (
+            Array.isArray(lastRSI) && lastRSI.length > 0 &&
+            Array.isArray(lastEMAFast) && lastEMAFast.length > 0 &&
+            Array.isArray(lastEMASlow) && lastEMASlow.length > 0 &&
+            Array.isArray(lastVolumeMA) && lastVolumeMA.length > 0
+        );
     }
 
     async setupIndicators() {
@@ -151,24 +206,6 @@ export class SignalsService {
             console.error('Error setting up indicators:', error);
             throw error; // Propagate the error to handle it in the initialization
         }
-    }
-
-    isIndicatorReady(pair) {
-        const indicators = this.indicators.get(pair);
-        if (!indicators) return false;
-
-        // Check if all indicators have valid values
-        const lastRSI = indicators.rsi.getResult();
-        const lastEMAFast = indicators.emaFast.getResult();
-        const lastEMASlow = indicators.emaSlow.getResult();
-        const lastVolumeMA = indicators.volumeMA.getResult();
-
-        return (
-            Array.isArray(lastRSI) && lastRSI.length > 0 &&
-            Array.isArray(lastEMAFast) && lastEMAFast.length > 0 &&
-            Array.isArray(lastEMASlow) && lastEMASlow.length > 0 &&
-            Array.isArray(lastVolumeMA) && lastVolumeMA.length > 0
-        );
     }
 
     async setupWebSocket() {
@@ -254,6 +291,13 @@ export class SignalsService {
                 };
 
                 this.updateCandleHistory(symbol, candle);
+                this.processedCandles++;
+                
+                // Log processing status every 100 candles
+                if (this.processedCandles % 100 === 0) {
+                    console.log(`\n🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
+                }
+
                 if (this.isInitialized) {
                     await this.processSignals(symbol);
                 }
@@ -400,10 +444,13 @@ export class SignalsService {
                           `#${signal.symbol.replace('/', '')} #${signal.type} #Crypto`;
             
             await this.telegramService.sendMessage(message);
-            console.log(`Signal sent for ${signal.symbol}: ${signal.type}`);
+            console.log(`\n🎯 Signal sent for ${signal.symbol}: ${signal.type}`);
+            console.log(`   Price: ${signal.price}`);
+            console.log(`   RSI: ${signal.rsi.toFixed(2)}`);
+            console.log(`   EMAs: ${signal.emaFast.toFixed(2)} / ${signal.emaSlow.toFixed(2)}`);
+            console.log(`   Volume: ${signal.volumeRatio}x average\n`);
         } catch (error) {
             console.error('Error sending signal:', error);
-            // Don't throw the error to prevent breaking the signal processing loop
         }
     }
 }
