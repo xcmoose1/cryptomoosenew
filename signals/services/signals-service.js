@@ -18,21 +18,77 @@ export class SignalsService {
     }
 
     formatSymbol(symbol) {
-        // Remove slash for WebSocket subscription
+        // Convert BTC/USDT to btcusdt format for HTX API
         return symbol.replace('/', '').toLowerCase();
     }
 
     deformatSymbol(symbol) {
-        // Add slash back for indicator tracking
+        // Convert btcusdt to BTC/USDT format for internal use
         const base = symbol.slice(0, -4).toUpperCase();
         const quote = symbol.slice(-4).toUpperCase();
         return `${base}/${quote}`;
+    }
+
+    async fetchHistoricalData(symbol, limit = 100) {
+        try {
+            const formattedSymbol = this.formatSymbol(symbol);
+            const url = `${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${limit}`;
+            
+            console.log(`Fetching historical data from: ${url}`);
+            const response = await fetch(url);
+            const data = await response.json();
+            
+            if (!response.ok) {
+                console.error(`HTTP error for ${symbol}:`, data);
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            if (data.status === 'ok' && Array.isArray(data.data)) {
+                // HTX returns data in reverse chronological order, so we reverse it
+                const candles = data.data.reverse().map(k => ({
+                    time: k.id * 1000, // Convert to milliseconds
+                    open: k.open,
+                    high: k.high,
+                    low: k.low,
+                    close: k.close,
+                    volume: k.vol
+                }));
+                
+                this.candleHistory.set(symbol, candles);
+                console.log(`Loaded ${candles.length} historical candles for ${symbol}`);
+                return candles;
+            } else {
+                console.error(`Invalid response data for ${symbol}:`, data);
+                // Initialize with empty array but don't throw error to allow other pairs to continue
+                this.candleHistory.set(symbol, []);
+                return [];
+            }
+        } catch (error) {
+            console.error(`Error fetching historical data for ${symbol}:`, error);
+            // Initialize with empty array to allow other pairs to continue
+            this.candleHistory.set(symbol, []);
+            return [];
+        }
     }
 
     async initialize() {
         try {
             console.log('Initializing SignalsService...');
             this.telegramService = createTelegramService();
+            
+            // Fetch historical data for all pairs
+            console.log('Fetching historical data for all pairs...');
+            const historyPromises = SIGNALS_CONFIG.TRADING_PAIRS.map(pair => 
+                this.fetchHistoricalData(pair, Math.max(
+                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
+                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
+                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
+                ))
+            );
+            
+            await Promise.all(historyPromises);
+            console.log('Historical data fetched for all pairs');
+            
             await this.setupIndicators();
             await this.setupWebSocket();
             this.isInitialized = true;
