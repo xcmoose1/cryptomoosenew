@@ -20,95 +20,88 @@ let cache = {
 
 const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
 
-// RSS feeds for major crypto news sources
+// News sources with proper type handling
 const NEWS_SOURCES = [
-    // Crypto News
+    // JSON API Sources
+    {
+        name: 'CryptoCompare News',
+        url: 'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&api_key=' + process.env.CRYPTOCOMPARE_API_KEY,
+        type: 'json',
+        transform: (data) => data.Data.map(item => ({
+            title: item.title,
+            description: item.body,
+            link: item.url,
+            date: new Date(item.published_on * 1000)
+        }))
+    },
+    // RSS Feed Sources
     {
         name: 'CoinDesk',
-        url: 'https://www.coindesk.com/arc/outboundfeeds/rss/'
+        url: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
+        type: 'rss'
     },
     {
         name: 'Cointelegraph',
-        url: 'https://cointelegraph.com/rss'
+        url: 'https://cointelegraph.com/rss',
+        type: 'rss'
     },
     {
         name: 'Bitcoin Magazine',
-        url: 'https://bitcoinmagazine.com/.rss/full/'
+        url: 'https://bitcoinmagazine.com/.rss/full/',
+        type: 'rss'
+    },
+    // Traditional Finance RSS
+    {
+        name: 'FT Markets',
+        url: 'https://www.ft.com/markets?format=rss',
+        type: 'rss'
     },
     {
-        name: 'Decrypt',
-        url: 'https://decrypt.co/feed'
+        name: 'WSJ Markets',
+        url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
+        type: 'rss'
     },
+    // Central Bank News
     {
-        name: 'The Block',
-        url: 'https://www.theblock.co/rss.xml'
-    },
-    {
-        name: 'CryptoSlate',
-        url: 'https://cryptoslate.com/feed/'
-    },
-    // Traditional Market News
-    {
-        name: 'Reuters Markets',
-        url: 'https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best'
-    },
-    {
-        name: 'MarketWatch',
-        url: 'http://feeds.marketwatch.com/marketwatch/topstories/'
-    },
-    {
-        name: 'Yahoo Finance',
-        url: 'https://finance.yahoo.com/news/rssindex'
-    },
-    {
-        name: 'CNBC Markets',
-        url: 'https://www.cnbc.com/id/10000664/device/rss/rss.html'
-    },
-    {
-        name: 'Investing.com',
-        url: 'https://www.investing.com/rss/news.rss'
-    },
-    {
-        name: 'Seeking Alpha',
-        url: 'https://seekingalpha.com/market_currents.xml'
-    },
-    {
-        name: 'Zero Hedge',
-        url: 'https://feeds.feedburner.com/zerohedge/feed'
-    },
-    // Economic News
-    {
-        name: 'IMF News',
-        url: 'https://www.imf.org/en/News/RSS'
-    },
-    {
-        name: 'World Bank',
-        url: 'https://www.worldbank.org/en/news/rss.xml'
-    },
-    {
-        name: 'Federal Reserve',
-        url: 'https://www.federalreserve.gov/feeds/press_all.xml'
+        name: 'Fed News',
+        url: 'https://www.federalreserve.gov/feeds/press_monetary.xml',
+        type: 'rss'
     }
 ];
 
 async function fetchNewsFromSources() {
     try {
         console.log(`Fetching news from ${NEWS_SOURCES.length} sources...`);
+        
         const newsPromises = NEWS_SOURCES.map(async source => {
             try {
                 console.log(`Fetching news from ${source.name}...`);
-                const feed = await parser.parseURL(source.url);
-                console.log(`Successfully fetched ${feed.items.length} items from ${source.name}`);
-                return feed.items.slice(0, 5).map(item => ({
-                    title: item.title,
-                    link: item.link,
-                    pubDate: item.pubDate,
-                    source: source.name,
-                    categories: item.categories || [],
-                    description: item.contentSnippet || item.description || ''
-                }));
+                
+                if (source.type === 'json') {
+                    const response = await axios.get(source.url);
+                    if (response.data) {
+                        const items = source.transform(response.data);
+                        console.log(`Successfully fetched ${items.length} items from ${source.name}`);
+                        return items.map(item => ({
+                            ...item,
+                            source: source.name
+                        }));
+                    }
+                    return [];
+                } else if (source.type === 'rss') {
+                    const feed = await parser.parseURL(source.url);
+                    console.log(`Successfully fetched ${feed.items.length} items from ${source.name}`);
+                    return feed.items.map(item => ({
+                        title: item.title,
+                        description: item.contentSnippet || item.content,
+                        link: item.link,
+                        date: new Date(item.pubDate || item.isoDate),
+                        source: source.name
+                    }));
+                }
+                return [];
             } catch (error) {
-                console.error(`Error fetching from ${source.name}:`, error.message);
+                console.log(`Error fetching from ${source.name}: ${error.message}`);
                 return [];
             }
         });
@@ -119,7 +112,7 @@ async function fetchNewsFromSources() {
         
         // Sort by date and get the most recent 20 articles
         const sortedNews = flattenedNews
-            .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
+            .sort((a, b) => b.date - a.date)
             .slice(0, 20);
             
         console.log(`Returning ${sortedNews.length} most recent articles`);
@@ -134,156 +127,79 @@ async function generateDigestWithGPT4(newsData) {
     try {
         console.log('Starting digest generation with GPT-4...');
         console.log(`Processing ${newsData.length} news items`);
+
+        // Format news data for the prompt
+        const formattedNews = newsData.map(item => 
+            `${item.title} (${item.source})\n${item.description}\n`
+        ).join('\n');
         
         const completion = await openai.chat.completions.create({
             model: "gpt-4",
             messages: [{
                 role: "system",
-                content: `You are CryptoMoose's expert market analyst and journalist. Create a comprehensive daily digest that connects global events to crypto markets. Your analysis should:
-
-                1. GLOBAL CONTEXT
-                - Analyze how global economic events affect crypto
-                - Connect political developments to market sentiment
-                - Identify macro trends that could impact crypto
-                - Track institutional money flow and sentiment
-
-                2. MARKET ANALYSIS
-                - Overall crypto market sentiment and trends
-                - Key price levels and technical patterns
-                - Volume analysis and market dynamics
-                - Correlation with traditional markets
-
-                3. SECTOR IMPACT
-                - How news affects different crypto sectors (DeFi, L1s, NFTs, etc.)
-                - Sector rotation and capital flow analysis
-                - Emerging trends and opportunities
-                - Risk assessment by sector
-
-                4. ACTIONABLE INSIGHTS
-                - Clear trading and investment implications
-                - Risk management considerations
-                - Potential opportunities to watch
-                - Defensive positioning strategies
-
-                5. FORWARD OUTLOOK
-                - Short-term market catalysts (24-48 hours)
-                - Medium-term trends to watch (1-2 weeks)
-                - Key upcoming events and their potential impact
-                - Risk factors and warning signs
-
-                Format Guidelines:
-                - Use bullet points for clarity
-                - Highlight key metrics and data points
-                - Include specific price levels where relevant
-                - Add confidence levels to predictions
-                - Separate short-term vs long-term implications
-                
-                Recent news to analyze: ${JSON.stringify(newsData)}
-                Current time: ${new Date().toISOString()}`
+                content: "Expert crypto analyst. Create a concise but comprehensive market digest. Focus on actionable insights and clear market direction."
+            }, {
+                role: "user",
+                content: `Based on these recent news items:\n\n${formattedNews}\n\nProvide a market analysis covering:\n1. Key market events and trends\n2. Impact on crypto prices\n3. Trading opportunities\n4. Risk factors\n5. Action items for traders`
             }],
             temperature: 0.7,
-            max_tokens: 2500
+            max_tokens: 1000
         });
 
-        console.log('Successfully received GPT-4 response');
-        const response = completion.choices[0].message.content;
-        
-        const digest = {
-            globalContext: extractSection(response, "GLOBAL CONTEXT"),
-            marketAnalysis: extractSection(response, "MARKET ANALYSIS"),
-            sectorImpact: extractSection(response, "SECTOR IMPACT"),
-            actionableInsights: extractSection(response, "ACTIONABLE INSIGHTS"),
-            outlook: extractSection(response, "FORWARD OUTLOOK")
-        };
-
-        console.log('Successfully extracted all sections');
-        return digest;
+        return completion.choices[0].message.content;
     } catch (error) {
-        console.error('Error in generateDigestWithGPT4:', error);
+        console.error('Error generating digest:', error);
         throw error;
     }
 }
 
 function extractSection(text, sectionName) {
-    try {
-        const regex = new RegExp(`${sectionName}[\\s\\S]*?(?=(?:GLOBAL CONTEXT|MARKET ANALYSIS|SECTOR IMPACT|ACTIONABLE INSIGHTS|FORWARD OUTLOOK|$))`, 'i');
-        const match = text.match(regex);
-        return match ? match[0].replace(sectionName, '').trim() : `No ${sectionName.toLowerCase()} data available.`;
-    } catch (error) {
-        console.error(`Error extracting ${sectionName}:`, error);
-        return `Error extracting ${sectionName.toLowerCase()} data.`;
-    }
+    const regex = new RegExp(`${sectionName}[:\\n]([\\s\\S]*?)(?=\\n\\n|$)`, 'i');
+    const match = text.match(regex);
+    return match ? match[1].trim() : '';
 }
 
 // Add CORS headers for this route
 router.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
     next();
 });
 
+// Route to get the latest news digest
 router.get('/', async (req, res) => {
     try {
-        console.log('Received request for daily digest');
-        
-        // Check if we have cached data less than 12 hours old
         const now = Date.now();
+        
+        // Check cache first
         if (cache.data && cache.timestamp && (now - cache.timestamp < CACHE_DURATION)) {
-            console.log('Returning cached digest data');
-            return res.json({
-                success: true,
-                data: cache.data,
-                cached: true,
-                nextUpdate: new Date(cache.timestamp + CACHE_DURATION).toISOString()
-            });
+            console.log('Returning cached digest...');
+            return res.json(cache.data);
         }
 
-        console.log('Cache miss or expired, fetching fresh data');
-        // Fetch fresh news data
+        console.log('Cache miss or expired, fetching fresh data...');
+        
+        // Fetch fresh news
         const newsData = await fetchNewsFromSources();
-        if (!newsData || newsData.length === 0) {
-            console.error('No news data available');
-            throw new Error('No news data available');
-        }
         
-        console.log(`Successfully fetched ${newsData.length} news items`);
-        
-        // Generate new digest
+        // Generate digest
         const digest = await generateDigestWithGPT4(newsData);
-        
-        // Validate digest format
-        if (!digest || typeof digest !== 'object') {
-            console.error('Invalid digest format generated');
-            throw new Error('Invalid digest format generated');
-        }
-        
-        console.log('Successfully generated new digest');
         
         // Update cache
         cache = {
-            data: digest,
+            data: {
+                digest,
+                timestamp: now,
+                newsCount: newsData.length
+            },
             timestamp: now
         };
-
-        console.log('Updated cache with new digest');
-
-        res.json({
-            success: true,
-            data: digest,
-            cached: false,
-            nextUpdate: new Date(now + CACHE_DURATION).toISOString()
-        });
+        
+        res.json(cache.data);
     } catch (error) {
-        console.error('Error in daily digest endpoint:', error);
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to generate daily digest',
-            errorDetails: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
+        console.error('Error in digest route:', error);
+        res.status(500).json({ error: 'Failed to generate digest' });
     }
 });
 

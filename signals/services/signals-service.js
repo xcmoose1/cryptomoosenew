@@ -433,15 +433,37 @@ export class SignalsService {
         }
 
         try {
-            const message = `${signal.type === 'BUY' ? '🟢' : '🔴'} ${signal.type} Signal for ${signal.symbol}\n\n` +
-                          `💰 Price: ${signal.price}\n` +
-                          `📊 RSI: ${signal.rsi.toFixed(2)}\n` +
-                          `📈 EMA Crossover:\n` +
-                          `   Fast(9): ${signal.emaFast.toFixed(2)}\n` +
-                          `   Slow(21): ${signal.emaSlow.toFixed(2)}\n` +
-                          `📊 Volume: ${signal.volumeRatio}x average\n` +
-                          `⏰ Time: ${signal.time}\n\n` +
-                          `#${signal.symbol.replace('/', '')} #${signal.type} #Crypto`;
+            const stopLoss = signal.type === 'BUY' ? signal.price * 0.98 : signal.price * 1.02;
+            const target1 = signal.type === 'BUY' ? signal.price * 1.03 : signal.price * 0.97;
+            const target2 = signal.type === 'BUY' ? signal.price * 1.05 : signal.price * 0.95;
+            const target3 = signal.type === 'BUY' ? signal.price * 1.08 : signal.price * 0.92;
+            
+            const message = `${signal.type === 'BUY' ? '🟢' : '🔴'} <b>SIGNAL ALERT: ${signal.type} ${signal.symbol}</b>\n\n` +
+                          `💰 <b>Entry Zone:</b> ${signal.price}\n` +
+                          `🛑 <b>Stop Loss:</b> ${stopLoss.toFixed(2)}\n` +
+                          `    • Risk: ${((Math.abs(signal.price - stopLoss) / signal.price) * 100).toFixed(2)}%\n` +
+                          `    • Position Size Recommendation: 1-2% of portfolio\n\n` +
+                          `🎯 <b>Targets:</b>\n` +
+                          `   1. ${target1.toFixed(2)} (${((Math.abs(target1 - signal.price) / signal.price) * 100).toFixed(2)}%)\n` +
+                          `   2. ${target2.toFixed(2)} (${((Math.abs(target2 - signal.price) / signal.price) * 100).toFixed(2)}%)\n` +
+                          `   3. ${target3.toFixed(2)} (${((Math.abs(target3 - signal.price) / signal.price) * 100).toFixed(2)}%)\n\n` +
+                          `📈 <b>Technical Indicators:</b>\n` +
+                          `   • RSI: ${signal.rsi.toFixed(2)}\n` +
+                          `   • EMA Fast(9): ${signal.emaFast.toFixed(2)}\n` +
+                          `   • EMA Slow(21): ${signal.emaSlow.toFixed(2)}\n` +
+                          `💎 <b>Volume:</b> ${signal.volumeRatio}x average\n\n` +
+                          `⚠️ <b>Risk Management Tips:</b>\n` +
+                          `• Use the recommended position size\n` +
+                          `• Consider scaling in/out of positions\n` +
+                          `• Move stop loss to break-even after first target\n` +
+                          `• Don't chase entry if price moves too far\n\n` +
+                          `🔗 <b>Trade on HTX:</b>\n` +
+                          `https://www.htx.com/invite/en-us/1f?invite_code=5duia223\n` +
+                          `• Up to 60% fee discount\n` +
+                          `• $10,000 welcome bonus\n` +
+                          `• Best liquidity & lowest fees\n\n` +
+                          `⚠️ <i>This is not financial advice. DYOR and trade responsibly.</i>\n` +
+                          `#${signal.symbol.replace('/', '')} #CryptoSignals #TradingSignals`;
             
             await this.telegramService.sendMessage(message);
             console.log(`\n🎯 Signal sent for ${signal.symbol}: ${signal.type}`);

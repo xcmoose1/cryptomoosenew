@@ -7,8 +7,14 @@ export class HTXDailyService {
 
     async getCurrentPrice(symbol) {
         try {
+            // Special cases for certain symbols
+            const symbolMap = {
+                'DOT': 'dot',
+                'ATOM': 'atom'
+            };
+            const formattedSymbol = symbolMap[symbol] || symbol.toLowerCase();
             // Using HTX's public market detail ticker endpoint
-            const response = await fetch(`${this.baseUrl}/market/detail/merged?symbol=${symbol.toLowerCase()}usdt`);
+            const response = await fetch(`${this.baseUrl}/market/detail/merged?symbol=${formattedSymbol}usdt`);
             
             if (!response.ok) {
                 throw new Error(`HTX API error: ${response.status}`);

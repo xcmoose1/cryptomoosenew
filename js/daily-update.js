@@ -3,46 +3,44 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import OpenAI from 'openai';
+import { HTXDailyService } from '../services/htx-daily.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const openai = new OpenAI();
+const htxService = new HTXDailyService();
+
+async function getCurrentBTCPrice() {
+    return await htxService.getCurrentPrice('btc');
+}
 
 async function generateDailyUpdate() {
     try {
         const currentPrice = await getCurrentBTCPrice(); // You'll need to implement this using your preferred crypto API
         
-        const prompt = `You are a professional crypto analyst. Based on the current BTC price of $${currentPrice}, provide a detailed daily market update in the following JSON format:
+        const prompt = `You are a professional crypto analyst and trader writing for CryptoMoose's members. Your task is to analyze the latest market developments and news, then create a comprehensive yet engaging article that helps members make informed trading decisions.
 
-{
-    "technical_stance": "bullish|bearish|neutral",
-    "metrics": {
-        "rsi": "value",
-        "macd": "status",
-        "volume": "status"
-    },
-    "price_levels": {
-        "resistance": ["price1", "price2", "price3"],
-        "support": ["price1", "price2", "price3"]
-    },
-    "catalysts": [
-        "catalyst1",
-        "catalyst2",
-        "catalyst3"
-    ],
-    "risks": [
-        "risk1",
-        "risk2",
-        "risk3"
-    ],
-    "outlook": "detailed 7-day outlook",
-    "events": [
-        "event1",
-        "event2",
-        "event3"
-    ],
-    "sentiment_score": "0-10"
+Based on the current BTC price of $${currentPrice} and recent market events, write an article that:
+
+1. Starts with the most impactful news or market events (political, economic, or technical)
+2. Explains how these events affect the crypto market
+3. Provides specific, actionable trading advice for different scenarios
+4. Includes risk management tips
+5. Offers a market outlook with potential scenarios members should watch for
+
+Make your analysis detailed but accessible. Include specific price levels, potential entry/exit points, and risk management strategies where relevant. If discussing political events (like elections), explain how different outcomes might affect the market and what positions members might consider.
+
+Format your response as a JSON with a single 'content' field containing the article text. Use markdown formatting for headers and emphasis.
+
+Example structure (but make it flow naturally):
+- Key Market Events & Analysis
+- How This Affects Your Trading
+- What to Watch For
+- Risk Management Tips
+- Market Outlook
+
+Be specific with numbers, prices, and percentages. Make it feel like professional trading advice while maintaining compliance by including necessary disclaimers.
 }
 
 Ensure all price levels are realistic based on the current BTC price. Include actual upcoming crypto events.`;
