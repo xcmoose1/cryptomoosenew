@@ -3,11 +3,16 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+// Load environment variables
+dotenv.config();
+
+// Check if OpenAI API key is set
+if (!process.env.OPENAI_API_KEY) {
+    console.error('WARNING: OPENAI_API_KEY is not set in environment variables');
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Load environment variables synchronously before any other imports
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL_ID) {
     console.error('Missing required environment variables:');
@@ -100,13 +105,48 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
-// Enable CORS for all routes
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(500).json({
+        success: false,
+        error: err.message || 'Internal server error'
+    });
 });
+
+// Serve static files from root directory
+app.use(express.static(path.join(__dirname, '..'), {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+        } else if (path.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        } else if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
+}));
+
+// Mount API routes
+app.use('/api/daily-digest', dailyDigestRouter);
+app.use('/api/opportunities', opportunitiesRouter);
+app.use('/api/klines', klineRoutes);
+app.use('/api/advanced-ta', advancedTARoutes);
+app.use('/api/gem-hunter', gemHunterRouter);
+app.use('/api/social-metrics', socialMetricsRouter);
+app.use('/api/market-intelligence', marketIntelligenceRouter);
+app.use('/api/indicators', indicatorsRouter);
+app.use('/api/signals', signalsRouter);
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/daily-update', dailyUpdateRouter);
 
 // Create a separate instance for daily updates
 const htxDailyService = new HTXDailyService();
@@ -129,96 +169,6 @@ app.use((req, res, next) => {
     }
 });
 
-// API Routes
-app.use('/htx-api', klineRoutes);  // Mount kline routes under /htx-api
-app.use('/api/indicators', indicatorsRouter);
-app.use('/api/opportunities', opportunitiesRouter);
-app.use('/api/daily-digest', dailyDigestRouter);
-app.use('/api/gem-hunter', gemHunterRouter);
-app.use('/api/social-metrics', socialMetricsRouter);
-app.use('/api/market-intelligence', marketIntelligenceRouter);
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
-app.use('/api/ai', aiRoutes);
-app.use('/api/daily-update', dailyUpdateRouter);
-app.use('/signals', signalsRouter);
-
-// Mock endpoints for sentiment and position data
-app.get('/api/htx/market/sentiment', (req, res) => {
-    res.json({
-        status: 'ok',
-        data: {
-            sentiment: 'Neutral',
-            timestamp: Date.now()
-        }
-    });
-});
-
-app.get('/api/htx/market/position', (req, res) => {
-    res.json({
-        status: 'ok',
-        data: {
-            position: 'Hold',
-            timestamp: Date.now()
-        }
-    });
-});
-
-// Health check endpoint
-app.get('/healthz', (req, res) => {
-    res.status(200).json({ status: 'healthy' });
-});
-
-// Serve static files with proper MIME types
-app.use(express.static(path.join(__dirname, '..'), {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.js')) {
-            // Set JavaScript module MIME type
-            res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-        }
-        if (path.endsWith('.html')) {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        }
-    }
-}));
-
-// Serve node_modules with proper MIME types
-app.use('/node_modules', express.static(path.join(__dirname, '..', 'node_modules'), {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-        }
-    }
-}));
-
-// Serve section files with proper MIME types
-app.use('/sections', express.static(path.join(__dirname, '..', 'sections'), {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-        }
-        if (path.endsWith('.html')) {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        }
-    }
-}));
-
-// Serve CSS files
-app.use('/css', express.static(path.join(__dirname, '..', 'css')));
-
-// Serve JavaScript files with proper MIME types
-app.use('/js', express.static(path.join(__dirname, '..', 'js'), {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.js')) {
-            res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-        }
-    }
-}));
-
 // Serve images
 app.use('/images', express.static(path.join(__dirname, '..', 'images')));
 
@@ -227,128 +177,64 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'members.html'));
 });
 
+// Daily digest route
+app.get('/daily-digest', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'daily_digest.html'));
+});
+
 // WebSocket connection handling
 wss.on('connection', (ws) => {
     console.log('New WebSocket connection established');
 
-    // Set up ping-pong
     ws.isAlive = true;
     ws.on('pong', () => {
         ws.isAlive = true;
     });
 
-    // Store subscriptions for this connection
-    ws.subscriptions = new Set();
+    // Handle connection errors
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
 
-    // Handle messages
-    ws.on('message', async (message) => {
-        try {
-            const data = JSON.parse(message);
-            console.log('Received message:', data);
-
-            // Handle subscription requests
-            if (data.sub) {
-                console.log('Subscription request:', data.sub);
-                ws.subscriptions.add(data.sub);
-                
-                // Send subscription confirmation
-                ws.send(JSON.stringify({
-                    status: 'ok',
-                    subbed: data.sub,
-                    ts: Date.now()
-                }));
-
-                // Send initial data for the subscription
-                if (data.sub.includes('kline')) {
-                    const [_, symbol, __, period] = data.sub.split('.');
-                    try {
-                        const response = await fetch(`${process.env.HTX_API_URL}/market/history/kline?symbol=${symbol}&period=${period}&size=200`);
-                        const klineData = await response.json();
-                        if (klineData.status === 'ok') {
-                            ws.send(JSON.stringify({
-                                ch: data.sub,
-                                ts: Date.now(),
-                                tick: klineData.data[0]
-                            }));
-                        }
-                    } catch (error) {
-                        console.error('Error fetching initial kline data:', error);
-                    }
-                }
-            }
-
-            // Handle unsubscribe requests
-            if (data.unsub) {
-                console.log('Unsubscribe request:', data.unsub);
-                ws.subscriptions.delete(data.unsub);
-                ws.send(JSON.stringify({
-                    status: 'ok',
-                    unsubbed: data.unsub,
-                    ts: Date.now()
-                }));
-            }
-
-            // Handle pong messages
-            if (data.pong) {
-                ws.isAlive = true;
-            }
-        } catch (error) {
-            console.error('Error handling WebSocket message:', error);
+    // Handle connection close
+    ws.on('close', () => {
+        console.log('WebSocket connection closed');
+        if (ws.pingInterval) {
+            clearInterval(ws.pingInterval);
         }
     });
 
-    // Handle close
-    ws.on('close', () => {
-        console.log('Client disconnected');
-        ws.subscriptions.clear();
-    });
-
-    // Send initial ping
-    ws.send(JSON.stringify({ ping: Date.now() }));
-});
-
-// Ping all clients periodically
-const pingInterval = setInterval(() => {
-    wss.clients.forEach((ws) => {
+    // Set up ping interval for this connection
+    ws.pingInterval = setInterval(() => {
         if (!ws.isAlive) {
-            console.log('Terminating inactive connection');
-            return ws.terminate();
+            console.log('Terminating dead connection');
+            ws.terminate();
+            return;
         }
         ws.isAlive = false;
-        ws.send(JSON.stringify({ ping: Date.now() }));
-    });
-}, 30000);
+        ws.ping();
+    }, 30000);
 
-// Simulate market data updates
-const marketDataInterval = setInterval(() => {
-    wss.clients.forEach((ws) => {
-        if (!ws.isAlive) return;
+    // Send initial connection success message
+    ws.send(JSON.stringify({
+        type: 'connection',
+        status: 'connected',
+        timestamp: Date.now()
+    }));
+});
 
-        ws.subscriptions.forEach(async (sub) => {
-            try {
-                if (sub.includes('kline')) {
-                    const [_, symbol, __, period] = sub.split('.');
-                    const response = await fetch(`${process.env.HTX_API_URL}/market/history/kline?symbol=${symbol}&period=${period}&size=1`);
-                    const data = await response.json();
-                    if (data.status === 'ok') {
-                        ws.send(JSON.stringify({
-                            ch: sub,
-                            ts: Date.now(),
-                            tick: data.data[0]
-                        }));
-                    }
-                }
-            } catch (error) {
-                console.error('Error sending market data update:', error);
-            }
-        });
-    });
-}, 1000);
+// Handle WebSocket server errors
+wss.on('error', (error) => {
+    console.error('WebSocket server error:', error);
+});
 
 // Clean up on server close
 wss.on('close', () => {
-    clearInterval(pingInterval);
-    clearInterval(marketDataInterval);
+    wss.clients.forEach((client) => {
+        if (client.pingInterval) {
+            clearInterval(client.pingInterval);
+        }
+    });
 });
 
 // HTX timeframe mapping
@@ -381,4 +267,12 @@ process.on('SIGTERM', () => {
         console.log('Server closed');
         process.exit(0);
     });
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });

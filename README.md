@@ -124,6 +124,92 @@ http://localhost:3000
 - `PORT`: Server port (default: 3000)
 - `NODE_ENV`: Environment mode (development/production)
 
+## Troubleshooting
+
+### Daily Digest Issues
+
+#### 1. "Cannot GET /daily_digest.html" Error
+If you see this error, check that:
+- The server is running (`node server/server.js`)
+- Static file serving is properly configured in `server.js`
+- The file exists in the root directory
+
+Solution:
+```javascript
+// In server.js, ensure you have:
+app.use(express.static(path.join(__dirname, '..'), {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.js')) {
+            res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+        } else if (path.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        } else if (path.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
+}));
+```
+
+#### 2. "Failed to fetch digest" Error
+This usually occurs when:
+- The data directory doesn't exist
+- Cache file permissions are incorrect
+- OpenAI API key is missing or invalid
+
+Solutions:
+1. Check data directory:
+```javascript
+// In daily-digest-service.js:
+const dataDir = path.join(process.cwd(), 'data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+}
+```
+
+2. Verify environment variables:
+```bash
+# In .env file:
+OPENAI_API_KEY=your_api_key_here
+```
+
+3. Clear the cache:
+```bash
+rm -f data/daily_digest_cache.json
+```
+
+#### 3. WebSocket Connection Issues
+If you see WebSocket errors:
+1. Check that the WebSocket server is properly initialized
+2. Ensure proper error handling is in place
+3. Verify the client is using the correct WebSocket URL
+
+Solution:
+```javascript
+// In server.js:
+const wss = new WebSocketServer({ server });
+
+wss.on('connection', (ws) => {
+    ws.isAlive = true;
+    ws.on('pong', () => { ws.isAlive = true; });
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
+});
+```
+
+### General Debugging Tips
+1. Check server logs for errors
+2. Verify all required dependencies are installed
+3. Ensure proper CORS headers are set
+4. Check file permissions in the data directory
+5. Verify API keys and environment variables
+
+For any other issues, please submit a GitHub issue with:
+- Error message and stack trace
+- Steps to reproduce
+- Environment details (Node.js version, OS, etc.)
+
 ## Features in Development
 - Enhanced social sentiment analysis
 - Advanced pattern recognition

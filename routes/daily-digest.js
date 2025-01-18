@@ -3,6 +3,7 @@ import express from 'express';
 import OpenAI from 'openai';
 import axios from 'axios';
 import Parser from 'rss-parser';
+import DailyDigestService from '../services/daily-digest-service.js'; 
 
 dotenv.config();
 const parser = new Parser();
@@ -11,6 +12,7 @@ const router = express.Router();
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY
 });
+const digestService = new DailyDigestService(); 
 
 // Cache for storing the last API response
 let cache = {
@@ -22,7 +24,35 @@ const CACHE_DURATION = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
 
 // News sources with proper type handling
 const NEWS_SOURCES = [
-    // JSON API Sources
+    // Market Data APIs
+    {
+        name: 'Yahoo Finance Market Data',
+        url: 'https://query1.finance.yahoo.com/v8/finance/chart/%5EGSPC?interval=1d',
+        type: 'json',
+        transform: (data) => [{
+            title: 'S&P 500 Market Update',
+            description: `Current: ${data?.chart?.result?.[0]?.meta?.regularMarketPrice || 'N/A'} | Change: ${data?.chart?.result?.[0]?.meta?.regularMarketChangePercent?.toFixed(2) || 'N/A'}%`,
+            link: 'https://finance.yahoo.com/quote/%5EGSPC',
+            date: new Date()
+        }]
+    },
+    // Traditional Finance News
+    {
+        name: 'Yahoo Finance News',
+        url: 'https://finance.yahoo.com/news/rssindex',
+        type: 'rss'
+    },
+    {
+        name: 'Reuters Markets',
+        url: 'https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best',
+        type: 'rss'
+    },
+    {
+        name: 'Bloomberg Markets',
+        url: 'https://feeds.bloomberg.com/markets/news.rss',
+        type: 'rss'
+    },
+    // Crypto News
     {
         name: 'CryptoCompare News',
         url: 'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&api_key=' + process.env.CRYPTOCOMPARE_API_KEY,
@@ -34,7 +64,6 @@ const NEWS_SOURCES = [
             date: new Date(item.published_on * 1000)
         }))
     },
-    // RSS Feed Sources
     {
         name: 'CoinDesk',
         url: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
@@ -45,26 +74,31 @@ const NEWS_SOURCES = [
         url: 'https://cointelegraph.com/rss',
         type: 'rss'
     },
-    {
-        name: 'Bitcoin Magazine',
-        url: 'https://bitcoinmagazine.com/.rss/full/',
-        type: 'rss'
-    },
-    // Traditional Finance RSS
-    {
-        name: 'FT Markets',
-        url: 'https://www.ft.com/markets?format=rss',
-        type: 'rss'
-    },
-    {
-        name: 'WSJ Markets',
-        url: 'https://feeds.a.dj.com/rss/RSSMarketsMain.xml',
-        type: 'rss'
-    },
-    // Central Bank News
+    // Economic Data
     {
         name: 'Fed News',
         url: 'https://www.federalreserve.gov/feeds/press_monetary.xml',
+        type: 'rss'
+    },
+    {
+        name: 'IMF News',
+        url: 'https://www.imf.org/en/News/RSS',
+        type: 'rss'
+    },
+    // Stock Market News
+    {
+        name: 'Seeking Alpha',
+        url: 'https://seekingalpha.com/market_currents.xml',
+        type: 'rss'
+    },
+    {
+        name: 'CNBC Markets',
+        url: 'https://www.cnbc.com/id/20409666/device/rss/rss.html',
+        type: 'rss'
+    },
+    {
+        name: 'MarketWatch',
+        url: 'http://feeds.marketwatch.com/marketwatch/marketpulse/',
         type: 'rss'
     }
 ];
@@ -84,7 +118,8 @@ async function fetchNewsFromSources() {
                         console.log(`Successfully fetched ${items.length} items from ${source.name}`);
                         return items.map(item => ({
                             ...item,
-                            source: source.name
+                            source: source.name,
+                            pubDate: item.pubDate || new Date().toISOString()
                         }));
                     }
                     return [];
@@ -95,28 +130,24 @@ async function fetchNewsFromSources() {
                         title: item.title,
                         description: item.contentSnippet || item.content,
                         link: item.link,
-                        date: new Date(item.pubDate || item.isoDate),
+                        pubDate: item.pubDate || item.isoDate || new Date().toISOString(),
                         source: source.name
                     }));
                 }
                 return [];
             } catch (error) {
-                console.log(`Error fetching from ${source.name}: ${error.message}`);
+                console.error(`Error fetching from ${source.name}:`, error.message);
                 return [];
             }
         });
 
-        const allNews = await Promise.all(newsPromises);
-        const flattenedNews = allNews.flat();
-        console.log(`Total news items fetched: ${flattenedNews.length}`);
+        const newsArrays = await Promise.all(newsPromises);
+        const allNews = newsArrays.flat();
         
-        // Sort by date and get the most recent 20 articles
-        const sortedNews = flattenedNews
-            .sort((a, b) => b.date - a.date)
-            .slice(0, 20);
-            
-        console.log(`Returning ${sortedNews.length} most recent articles`);
-        return sortedNews;
+        console.log(`Total news items fetched: ${allNews.length}`);
+        console.log('Returning 20 most recent articles');
+        
+        return allNews;
     } catch (error) {
         console.error('Error in fetchNewsFromSources:', error);
         throw error;
@@ -185,36 +216,29 @@ router.use((req, res, next) => {
 // Route to get the latest news digest
 router.get('/', async (req, res) => {
     try {
-        const now = Date.now();
-        
-        // Check cache first
-        if (cache.data && cache.timestamp && (now - cache.timestamp < CACHE_DURATION)) {
-            console.log('Returning cached digest...');
-            return res.json(cache.data);
-        }
-
-        console.log('Cache miss or expired, fetching fresh data...');
-        
-        // Fetch fresh news
+        // Get news data
+        console.log('Fetching news...');
         const newsData = await fetchNewsFromSources();
+        console.log(`Fetched ${newsData.length} news items`);
         
-        // Generate digest
-        const digest = await generateDigestWithGPT4(newsData);
+        // Get the 20 most recent articles
+        const recentNews = newsData
+            .sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate))
+            .slice(0, 20);
         
-        // Update cache
-        cache = {
-            data: {
-                digest,
-                timestamp: now,
-                newsCount: newsData.length
-            },
-            timestamp: now
-        };
+        // Generate analysis using news
+        const analysis = await digestService.generateAnalysis(recentNews);
         
-        res.json(cache.data);
+        res.json({
+            success: true,
+            data: analysis
+        });
     } catch (error) {
-        console.error('Error in digest route:', error);
-        res.status(500).json({ error: 'Failed to generate digest' });
+        console.error('Error in daily digest route:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 

@@ -2,28 +2,42 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import OpenAI from 'openai';
+import Parser from 'rss-parser';
 
 export default class DailyDigestService {
     constructor() {
-        this.openai = new OpenAI();
+        // Initialize OpenAI with API key from environment
+        if (!process.env.OPENAI_API_KEY) {
+            console.error('OPENAI_API_KEY is not set in environment variables');
+        }
+        this.openai = new OpenAI({
+            apiKey: process.env.OPENAI_API_KEY
+        });
+
         this.NEWS_CACHE_FILE = path.join(process.cwd(), 'data', 'daily_digest_cache.json');
         this.REFRESH_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+        
+        // News sources configuration
         this.NEWS_SOURCES = [
             {
-                url: 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd',
-                type: 'price'
+                name: 'Reuters Business',
+                url: 'https://www.reutersagency.com/feed/?best-topics=business-finance&post_type=best',
+                type: 'rss'
             },
             {
-                url: 'https://api.coingecko.com/api/v3/search/trending',
-                type: 'trending'
+                name: 'Bloomberg Markets',
+                url: 'https://www.bloomberg.com/feeds/markets',
+                type: 'rss'
             },
             {
-                url: 'https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT',
-                type: 'market'
+                name: 'CoinDesk',
+                url: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
+                type: 'rss'
             },
             {
-                url: 'https://api.coingecko.com/api/v3/global',
-                type: 'global'
+                name: 'Cointelegraph',
+                url: 'https://cointelegraph.com/rss',
+                type: 'rss'
             }
         ];
         
@@ -34,6 +48,8 @@ export default class DailyDigestService {
                 'User-Agent': 'CryptoMoose/1.0'
             }
         });
+        
+        this.parser = new Parser();
         
         this.ensureFilesExist();
     }
@@ -46,8 +62,11 @@ export default class DailyDigestService {
         
         if (!fs.existsSync(this.NEWS_CACHE_FILE)) {
             fs.writeFileSync(this.NEWS_CACHE_FILE, JSON.stringify({
-                data: null,
-                marketData: null,
+                data: {
+                    analysis: '',
+                    lastUpdated: null
+                },
+                newsData: null,
                 lastUpdated: null,
                 nextUpdate: null
             }));
@@ -56,200 +75,159 @@ export default class DailyDigestService {
 
     async getDigest(forceRefresh = false) {
         try {
-            const cache = JSON.parse(fs.readFileSync(this.NEWS_CACHE_FILE, 'utf8'));
-            const now = new Date();
-            const lastUpdated = cache.lastUpdated ? new Date(cache.lastUpdated) : null;
-
-            if (!forceRefresh && lastUpdated && (now - lastUpdated) < this.REFRESH_INTERVAL) {
-                return {
-                    success: true,
-                    data: cache.data,
-                    cached: true,
-                    nextUpdate: cache.nextUpdate
-                };
+            // Check cache first if not forcing refresh
+            if (!forceRefresh) {
+                const cachedData = await this.readCache();
+                if (cachedData && Date.now() - cachedData.timestamp < this.REFRESH_INTERVAL) {
+                    console.log('Returning cached digest data');
+                    return {
+                        success: true,
+                        data: cachedData.data,
+                        newsData: cachedData.newsData,
+                        cached: true,
+                        lastUpdated: new Date(cachedData.timestamp),
+                        nextUpdate: new Date(cachedData.timestamp + this.REFRESH_INTERVAL)
+                    };
+                }
             }
 
-            const marketData = await this.fetchMarketData();
-            const analysis = await this.generateAnalysis(marketData);
+            console.log('Fetching fresh news data...');
+            const newsData = await this.fetchNews();
+            console.log('News data fetched:', newsData);
 
-            const newCache = {
-                data: analysis,
-                marketData: marketData,
-                lastUpdated: now.toISOString(),
-                nextUpdate: new Date(now.getTime() + this.REFRESH_INTERVAL).toISOString()
+            // Generate analysis based on news data
+            const analysisData = await this.generateAnalysis(newsData);
+            console.log('Analysis generated');
+
+            const digestData = {
+                analysis: analysisData.analysis,
+                lastUpdated: new Date()
             };
 
-            fs.writeFileSync(this.NEWS_CACHE_FILE, JSON.stringify(newCache));
+            // Cache the data
+            await this.writeCache({
+                data: digestData,
+                newsData: newsData,
+                timestamp: Date.now()
+            });
 
             return {
                 success: true,
-                data: analysis,
+                data: digestData,
+                newsData: newsData,
                 cached: false,
-                nextUpdate: newCache.nextUpdate
+                lastUpdated: new Date(),
+                nextUpdate: new Date(Date.now() + this.REFRESH_INTERVAL)
             };
 
         } catch (error) {
             console.error('Error in getDigest:', error);
             return {
                 success: false,
-                error: error.message,
+                error: error.message || 'Failed to generate digest',
                 cached: false
             };
         }
     }
 
-    async fetchMarketData() {
-        const marketData = {
-            price: null,
-            trending: [],
-            market: null,
-            global: null
+    async fetchNews() {
+        const news = {
+            traditional: [],
+            crypto: []
         };
-        
+
         for (const source of this.NEWS_SOURCES) {
             try {
-                console.log(`Fetching from ${source.url}...`);
-                const response = await this.axios.get(source.url);
-                console.log(`Response from ${source.type}:`, JSON.stringify(response.data).slice(0, 200) + '...');
+                console.log(`Fetching news from ${source.name}...`);
+                const feed = await this.parser.parseURL(source.url);
                 
-                switch(source.type) {
-                    case 'price':
-                        marketData.price = response.data.bitcoin?.usd;
-                        break;
-                    case 'trending':
-                        // Only take symbol and price change
-                        marketData.trending = (response.data.coins || []).slice(0, 3).map(coin => ({
-                            symbol: coin.item.symbol,
-                            price_change: coin.item.data?.price_change_percentage_24h?.usd
-                        }));
-                        break;
-                    case 'market':
-                        marketData.market = {
-                            priceChange: response.data.priceChangePercent
-                        };
-                        break;
-                    case 'global':
-                        // Only take essential metrics
-                        const globalData = response.data.data || {};
-                        marketData.global = {
-                            btc_dominance: globalData.market_cap_percentage?.btc,
-                            total_market_cap_usd: globalData.total_market_cap?.usd
-                        };
-                        break;
+                // Get the latest 5 articles from each source
+                const articles = feed.items.slice(0, 5).map(item => ({
+                    title: item.title,
+                    link: item.link,
+                    pubDate: item.pubDate,
+                    source: source.name
+                }));
+
+                // Categorize news
+                if (source.name.toLowerCase().includes('coin')) {
+                    news.crypto.push(...articles);
+                } else {
+                    news.traditional.push(...articles);
                 }
             } catch (error) {
-                console.log(`Error fetching from ${source.url}: ${error.message}`);
-                // Continue with other sources
+                console.error(`Error fetching news from ${source.name}:`, error);
             }
         }
-        
-        console.log('Final market data:', JSON.stringify(marketData, null, 2));
 
-        return marketData;
+        return news;
     }
 
-    async generateAnalysis(marketData) {
-        // Clean and validate data
-        const btcPrice = marketData.price ? Number(marketData.price).toLocaleString() : 'N/A';
-        const priceChange = marketData.market?.priceChange ? Number(marketData.market.priceChange).toFixed(2) : 'N/A';
-        const marketCap = marketData.global?.total_market_cap_usd ? 
-            `$${(marketData.global.total_market_cap_usd / 1e9).toFixed(1)}B` : 'N/A';
-        const btcDom = marketData.global?.btc_dominance ? 
-            `${marketData.global.btc_dominance.toFixed(1)}%` : 'N/A';
-
-        // Format trending coins with price changes
-        const trending = marketData.trending
-            .map(c => `${c.symbol.toUpperCase()}${c.price_change ? ` ${c.price_change > 0 ? '+' : ''}${c.price_change.toFixed(1)}%` : ''}`)
-            .join(', ') || 'None';
-
-        const prompt = `BTC $${btcPrice} (${priceChange}%) | MCap ${marketCap} | Dom ${btcDom}
-Trending: ${trending}
-
-Provide:
-1. Market analysis
-2. Trading strategy
-3. Risk management
-4. Key levels
-5. Next moves`;
-
-        // Debug log
-        console.log('Prompt length:', prompt.length);
-        console.log('Prompt:', prompt);
-
+    async generateAnalysis(newsData) {
         try {
+            if (!process.env.OPENAI_API_KEY) {
+                throw new Error('OpenAI API key is not configured');
+            }
+
+            if (!newsData || newsData.length === 0) {
+                throw new Error('No news data provided');
+            }
+
+            console.log(`Generating analysis with ${newsData.length} news items...`);
+
+            const prompt = `Latest Market News:
+${newsData.map(article => `- ${article.title} (${article.source})`).join('\n')}
+
+Write a comprehensive and engaging market analysis article that reads like a top-tier financial news piece. The article should be detailed (around 1000-1200 words) and naturally flow between topics without formal sections.
+
+Key elements to include:
+- A compelling headline that captures the day's most significant story
+- A strong opening that hooks readers and sets the context
+- Natural transitions between different market aspects (crypto, traditional, etc.)
+- Deep analysis of key events and their interconnections
+- Expert insights and forward-looking perspectives
+- Clear takeaways for investors woven throughout the narrative
+
+Style Guidelines:
+- Write in a clear, engaging style that sophisticated readers will appreciate
+- Use subheadings naturally within the text to improve readability
+- Highlight important points with strong statements
+- Include relevant quotes or expert opinions
+- Use analogies and real-world examples to explain complex topics
+- Make it personal - help readers understand why they should care
+- Be specific about opportunities and risks, but avoid technical trading advice
+
+Format the text with HTML for better presentation:
+- Use <h1> for the main headline
+- Use <h2> tags sparingly for natural subheadings (in a journalistic style)
+- Use <strong> tags to emphasize key points
+- Use <div class="highlight"> for particularly important insights
+- Use <blockquote> for notable quotes or key takeaways
+
+The goal is to create a compelling narrative that helps readers understand the big picture and make smarter decisions. Think Bloomberg Opinion or Financial Times analysis piece, but with more depth and natural flow between topics.`;
+
+            console.log('Sending request to OpenAI...');
+
             const completion = await this.openai.chat.completions.create({
                 model: "gpt-4",
-                messages: [{
-                    role: "system",
-                    content: "Expert crypto analyst. Give actionable market analysis. Use double newlines between sections."
-                }, {
-                    role: "user",
-                    content: prompt
-                }],
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a world-class financial journalist with a talent for making complex market events clear and relevant to readers. Your writing style combines the narrative flair of a feature writer with the deep insight of a market expert. Focus on telling compelling stories that help readers understand what's happening in the markets and why it matters to them."
+                    },
+                    {
+                        role: "user",
+                        content: prompt
+                    }
+                ],
                 temperature: 0.7,
-                max_tokens: 1000
+                max_tokens: 2500
             });
 
-            const response = completion.choices[0].message.content;
-            const sections = response.split('\n\n');
-
-            return {
-                globalContext: sections[0] || '',
-                marketAnalysis: sections[1] || '',
-                sectorImpact: sections[2] || '',
-                actionableInsights: sections[3] || '',
-                outlook: sections[4] || ''
-            };
+            return { analysis: completion.choices[0].message.content };
 
         } catch (error) {
             console.error('Error generating analysis:', error);
-            throw error;
-        }
-    }
-- How could this impact the market?
-- Which assets might be affected?
-- How can members position themselves?
-- Entry points and risk levels to watch
-- Potential timeframe for the trade
-
-Risk Factors & Warning Signs
-- Key risks to watch
-- Invalidation levels
-- Position sizing recommendations
-- Hedging suggestions if needed
-
-Member Action Items
-• Clear, numbered steps members should consider
-• Specific entry/exit levels where relevant
-• Risk management guidelines
-• Portfolio adjustment suggestions
-
-Remember:
-- Be specific with trading suggestions
-- Include both short and mid-term opportunities
-- Always include risk management advice
-- Make members feel you're personally guiding them
-
-Articles: ${JSON.stringify(articles)}`;
-
-            const response = await this.axios.post('https://api.openai.com/v1/chat/completions', {
-                model: 'gpt-4',
-                messages: [{
-                    role: 'user',
-                    content: prompt
-                }],
-                temperature: 0.7,
-                max_tokens: 2000
-            }, {
-                headers: {
-                    'Authorization': `Bearer ${this.OPENAI_API_KEY}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            return response.data.choices[0].message.content;
-        } catch (error) {
-            console.error('Error generating digest:', error);
             throw error;
         }
     }
@@ -269,50 +247,6 @@ Articles: ${JSON.stringify(articles)}`;
             fs.writeFileSync(this.NEWS_CACHE_FILE, JSON.stringify(data));
         } catch (error) {
             console.error('Error writing cache:', error);
-        }
-    }
-
-    async getDigest(forceRefresh = false) {
-        try {
-            const now = Date.now();
-            const cacheData = await this.readCache();
-
-            // Return cached data if:
-            // 1. Not a forced refresh
-            // 2. Cache exists and is less than 6 hours old
-            if (!forceRefresh && 
-                cacheData.lastUpdated && 
-                (now - new Date(cacheData.lastUpdated).getTime()) < this.REFRESH_INTERVAL &&
-                cacheData.digest) {
-                return {
-                    success: true,
-                    data: cacheData.digest,
-                    nextUpdate: new Date(cacheData.lastUpdated).getTime() + this.REFRESH_INTERVAL
-                };
-            }
-
-            // Generate new digest
-            const articles = await this.fetchNews();
-            const digest = await this.generateDigest(articles);
-            
-            // Update cache
-            await this.writeCache({
-                lastUpdated: new Date().toISOString(),
-                digest
-            });
-
-            return {
-                success: true,
-                data: digest,
-                nextUpdate: Date.now() + this.REFRESH_INTERVAL
-            };
-
-        } catch (error) {
-            console.error('Error in getDigest:', error);
-            return {
-                success: false,
-                error: 'Failed to generate digest'
-            };
         }
     }
 
