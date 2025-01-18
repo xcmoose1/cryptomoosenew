@@ -9,8 +9,43 @@ export class HTXDailyService {
         try {
             // Special cases for certain symbols
             const symbolMap = {
+                'HBAR': 'hbar',
+                'TON': 'ton',
+                'ALGO': 'algo',
+                'GRT': 'grt',
+                'CHZ': 'chz',
+                'VET': 'vet',
+                'MANA': 'mana',
+                'ZIL': 'zil',
+                'IOTA': 'iota',
+                'GALA': 'gala',
+                'ZRX': 'zrx',
+                'ENJ': 'enj',
+                'AUDIO': 'audio',
+                'FLOW': 'flowusdt',
+                'MASK': 'mask',
+                'ANKR': 'ankr',
+                'ARB': 'arb',
+                'KAVA': 'kava',
+                'ONE': 'one',
+                'CFX': 'cfx',
+                'SKL': 'skl',
+                'SUI': 'sui',
+                'UNI': 'uni',
+                'BTC': 'btc',
                 'DOT': 'dot',
-                'ATOM': 'atom'
+                'ATOM': 'atom',
+                'LINK': 'link',
+                'SOL': 'sol',
+                'XRP': 'xrp',
+                'ADA': 'ada',
+                'AVAX': 'avax',
+                'DOGE': 'doge',
+                'SHIB': 'shib',
+                'TRX': 'trx',
+                'LTC': 'ltc',
+                'ETC': 'etc',
+                'ETH': 'eth'
             };
             const formattedSymbol = symbolMap[symbol] || symbol.toLowerCase();
             // Using HTX's public market detail ticker endpoint

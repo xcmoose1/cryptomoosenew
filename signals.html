@@ -602,6 +602,17 @@
     </div>
 
     <script>
+        let ws;
+        let signalsWs;
+        const pairPrices = new Map();
+        const tradingPairs = [
+            'BTC/USDT', 'HBAR/USDT', 'TON/USDT', 'ALGO/USDT', 'GRT/USDT',
+            'CHZ/USDT', 'VET/USDT', 'MANA/USDT', 'ZIL/USDT', 'IOTA/USDT',
+            'GALA/USDT', 'ZRX/USDT', 'ENJ/USDT', 'AUDIO/USDT', 'FLOW/USDT',
+            'MASK/USDT', 'ANKR/USDT', 'ARB/USDT', 'KAVA/USDT', 'ONE/USDT',
+            'CFX/USDT', 'SKL/USDT', 'SUI/USDT', 'UNI/USDT'
+        ];
+
         // Add Roboto Mono font for prices
         const fontLink = document.createElement('link');
         fontLink.href = 'https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap';
@@ -613,18 +624,135 @@
         script.src = 'https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js';
         document.head.appendChild(script);
 
-        const tradingPairs = [
-            'HBAR/USDT', 'TON/USDT', 'ALGO/USDT', 'GRT/USDT', 'CHZ/USDT',
-            'VET/USDT', 'MANA/USDT', 'ZIL/USDT', 'IOTA/USDT', 'GALA/USDT',
-            'ZRX/USDT', 'ENJ/USDT', 'AUDIO/USDT', 'FLOW/USDT', 'MASK/USDT',
-            'ANKR/USDT', 'FTM/USDT', 'ARB/USDT', 'KAVA/USDT', 'ONE/USDT',
-            'CFX/USDT', 'SKL/USDT', 'SUI/USDT', 'UNI/USDT', 'BTC/USDT'
-        ];
+        function connectSignalsWebSocket() {
+            console.log('Connecting to Signals WebSocket...');
+            signalsWs = new WebSocket('ws://localhost:8081');
 
-        const pairPrices = new Map();
-        let ws;
-        let reconnectAttempts = 0;
-        const maxReconnectAttempts = 5;
+            signalsWs.onopen = () => {
+                console.log('Connected to Signals WebSocket');
+            };
+
+            signalsWs.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'signal') {
+                        const signal = message.data;
+                        console.log('Received Signal:', signal); // Debug log for signals
+                        
+                        // Add signal to the grid
+                        const signalsGrid = document.querySelector('.signals-grid');
+                        const signalCard = createSignalCard(signal);
+                        signalsGrid.insertAdjacentHTML('afterbegin', signalCard);
+                        
+                        // Keep only the last 50 signals
+                        const cards = signalsGrid.children;
+                        if (cards.length > 50) {
+                            signalsGrid.removeChild(cards[cards.length - 1]);
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error processing signals message:', error);
+                }
+            };
+
+            signalsWs.onclose = () => {
+                console.log('Signals WebSocket connection closed');
+                // Reconnect after 5 seconds
+                setTimeout(connectSignalsWebSocket, 5000);
+            };
+
+            signalsWs.onerror = (error) => {
+                console.error('Signals WebSocket error:', error);
+            };
+        }
+
+        function connectWebSocket() {
+            console.log('Connecting to WebSocket...');
+            ws = new WebSocket('wss://api.huobi.pro/ws');
+            ws.binaryType = 'arraybuffer';
+
+            ws.onopen = () => {
+                console.log('Connected to WebSocket');
+                const statusIndicator = document.querySelector('.status-indicator');
+                const statusText = document.querySelector('.status-text');
+                
+                if (statusIndicator && statusText) {
+                    statusIndicator.classList.add('connected');
+                    statusText.textContent = 'Connected';
+                }
+                
+                reconnectAttempts = 0;
+
+                // Subscribe to market data for all pairs with a slight delay between each
+                tradingPairs.forEach((pair, index) => {
+                    setTimeout(() => {
+                        const symbol = pair.toLowerCase().replace('/', '');
+                        console.log('Subscribing to:', symbol);
+                        ws.send(JSON.stringify({
+                            "sub": `market.${symbol}.ticker`,
+                            "id": symbol
+                        }));
+                    }, index * 100); // Add 100ms delay between each subscription
+                });
+            };
+
+            ws.onmessage = async (event) => {
+                try {
+                    let data;
+                    if (event.data instanceof ArrayBuffer) {
+                        const textDecoder = new TextDecoder('utf-8');
+                        const decompressed = pako.inflate(new Uint8Array(event.data), { to: 'string' });
+                        data = JSON.parse(decompressed);
+                        
+                        // Debug log for price updates
+                        if (data.tick) {
+                            console.log(`Price Update - Symbol: ${data.ch.split('.')[1]}, Price: ${data.tick.close}`);
+                        }
+                    } else {
+                        data = JSON.parse(event.data);
+                    }
+
+                    if (data.ping) {
+                        ws.send(JSON.stringify({ pong: data.ping }));
+                    } else if (data.ch && data.tick) {
+                        // Extract symbol from channel name
+                        const symbol = data.ch.split('.')[1].toUpperCase();
+                        const formattedSymbol = symbol.slice(0, -4) + '/' + symbol.slice(-4);
+                        
+                        // Update price
+                        const oldPrice = pairPrices.get(formattedSymbol)?.value || data.tick.close;
+                        pairPrices.set(formattedSymbol, {
+                            value: data.tick.close,
+                            change: data.tick.close - oldPrice
+                        });
+                        
+                        // Update UI
+                        updatePairsList();
+                    }
+                } catch (error) {
+                    console.error('Error processing message:', error);
+                }
+            };
+
+            ws.onclose = () => {
+                const statusIndicator = document.querySelector('.status-indicator');
+                const statusText = document.querySelector('.status-text');
+                
+                if (statusIndicator && statusText) {
+                    statusIndicator.classList.remove('connected');
+                    statusText.textContent = 'Disconnected';
+                }
+                
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    setTimeout(connectWebSocket, 5000);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
 
         function updatePairsList() {
             const pairList = document.querySelector('.pair-list');
@@ -682,93 +810,14 @@
             signalsGrid.innerHTML = signals.map(signal => createSignalCard(signal)).join('');
         }
 
-        function connectWebSocket() {
-            console.log('Connecting to WebSocket...');
-            ws = new WebSocket('wss://api.huobi.pro/ws');
-            ws.binaryType = 'arraybuffer';
-
-            ws.onopen = () => {
-                console.log('Connected to WebSocket');
-                const statusIndicator = document.querySelector('.status-indicator');
-                const statusText = document.querySelector('.status-text');
-                
-                if (statusIndicator && statusText) {
-                    statusIndicator.classList.add('connected');
-                    statusText.textContent = 'Connected';
-                }
-                
-                reconnectAttempts = 0;
-
-                // Subscribe to market data for all pairs with a slight delay between each
-                tradingPairs.forEach((pair, index) => {
-                    setTimeout(() => {
-                        const symbol = pair.toLowerCase().replace('/', '');
-                        console.log('Subscribing to:', symbol);
-                        ws.send(JSON.stringify({
-                            "sub": `market.${symbol}.ticker`,
-                            "id": symbol
-                        }));
-                    }, index * 100); // Add 100ms delay between each subscription
-                });
-            };
-
-            ws.onmessage = async (event) => {
-                try {
-                    let data;
-                    if (event.data instanceof ArrayBuffer) {
-                        const textDecoder = new TextDecoder('utf-8');
-                        const decompressed = pako.inflate(new Uint8Array(event.data), { to: 'string' });
-                        data = JSON.parse(decompressed);
-                    } else {
-                        data = JSON.parse(event.data);
-                    }
-
-                    if (data.ping) {
-                        ws.send(JSON.stringify({ pong: data.ping }));
-                    } else if (data.ch && data.tick) {
-                        // Extract symbol from channel name
-                        const symbol = data.ch.split('.')[1].toUpperCase();
-                        const formattedSymbol = symbol.slice(0, -4) + '/' + symbol.slice(-4);
-                        
-                        // Update price
-                        const oldPrice = pairPrices.get(formattedSymbol)?.value || data.tick.close;
-                        pairPrices.set(formattedSymbol, {
-                            value: data.tick.close,
-                            change: data.tick.close - oldPrice
-                        });
-                        
-                        // Update UI
-                        updatePairsList();
-                    }
-                } catch (error) {
-                    console.error('Error processing message:', error);
-                }
-            };
-
-            ws.onclose = () => {
-                const statusIndicator = document.querySelector('.status-indicator');
-                const statusText = document.querySelector('.status-text');
-                
-                if (statusIndicator && statusText) {
-                    statusIndicator.classList.remove('connected');
-                    statusText.textContent = 'Disconnected';
-                }
-                
-                if (reconnectAttempts < maxReconnectAttempts) {
-                    reconnectAttempts++;
-                    setTimeout(connectWebSocket, 5000);
-                }
-            };
-
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-            };
-        }
+        let reconnectAttempts = 0;
+        const maxReconnectAttempts = 5;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             updatePairsList();
             connectWebSocket();
+            connectSignalsWebSocket();
 
             // Example signals
             const exampleSignals = [];

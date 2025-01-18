@@ -125,31 +125,46 @@ async function fetchNewsFromSources() {
 
 async function generateDigestWithGPT4(newsData) {
     try {
-        console.log('Starting digest generation with GPT-4...');
-        console.log(`Processing ${newsData.length} news items`);
+        // Take only the 8 most recent articles and create very concise summaries
+        const sortedNews = newsData
+            .sort((a, b) => new Date(b.date) - new Date(a.date))
+            .slice(0, 8)
+            .map(item => ({
+                title: item.title.substring(0, 100), // Limit title length
+                source: item.source,
+                summary: item.description 
+                    ? item.description.substring(0, 150) + '...' // Very short summary
+                    : 'No description available'
+            }));
 
-        // Format news data for the prompt
-        const formattedNews = newsData.map(item => 
-            `${item.title} (${item.source})\n${item.description}\n`
-        ).join('\n');
-        
-        const completion = await openai.chat.completions.create({
+        const prompt = {
             model: "gpt-4",
-            messages: [{
-                role: "system",
-                content: "Expert crypto analyst. Create a concise but comprehensive market digest. Focus on actionable insights and clear market direction."
-            }, {
-                role: "user",
-                content: `Based on these recent news items:\n\n${formattedNews}\n\nProvide a market analysis covering:\n1. Key market events and trends\n2. Impact on crypto prices\n3. Trading opportunities\n4. Risk factors\n5. Action items for traders`
-            }],
-            temperature: 0.7,
-            max_tokens: 1000
-        });
+            messages: [
+                {
+                    role: "system",
+                    content: "You are a crypto market analyst. Create a concise market digest. Be brief but insightful."
+                },
+                {
+                    role: "user",
+                    content: `Based on these recent crypto news items, create a brief market digest with:
+1. Market Summary (2 sentences)
+2. Key Developments (3 bullet points)
+3. Trading Insights (2 bullet points)
+4. Risk Factors (1-2 bullet points)
 
+News: ${JSON.stringify(sortedNews, null, 1)}`
+                }
+            ],
+            max_tokens: 500,
+            temperature: 0.7
+        };
+
+        const completion = await openai.chat.completions.create(prompt);
         return completion.choices[0].message.content;
+
     } catch (error) {
-        console.error('Error generating digest:', error);
-        throw error;
+        console.error('Error in generateDigestWithGPT4:', error);
+        throw new Error('Failed to generate market digest: ' + error.message);
     }
 }
 

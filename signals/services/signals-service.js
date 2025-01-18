@@ -1,6 +1,6 @@
 import { SIGNALS_CONFIG } from '../config/signals-config.js';
 import { RSI, MACD, EMA, SMA } from 'technicalindicators';
-import WebSocket from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import { createTelegramService } from './telegram-service.js';
 import pako from 'pako';
 
@@ -18,6 +18,19 @@ export class SignalsService {
         this.lastStatusUpdate = Date.now();
         this.statusUpdateInterval = 5 * 60 * 1000; // 5 minutes
         this.processedCandles = 0;
+        this.clients = new Set(); // WebSocket clients
+        this.wss = new WebSocketServer({ port: 8081 }); // WebSocket server
+        
+        // Handle WebSocket connections
+        this.wss.on('connection', (ws) => {
+            console.log('New client connected to signals WebSocket');
+            this.clients.add(ws);
+            
+            ws.on('close', () => {
+                console.log('Client disconnected from signals WebSocket');
+                this.clients.delete(ws);
+            });
+        });
     }
 
     formatSymbol(symbol) {
@@ -261,9 +274,9 @@ export class SignalsService {
 
         // Setup ping interval
         const pingInterval = setInterval(() => {
-            if (this.ws.readyState === WebSocket.OPEN) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ ping: Date.now() }));
-            } else if (this.ws.readyState === WebSocket.CLOSED) {
+            } else if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
                 clearInterval(pingInterval);
             }
         }, 20000);
@@ -427,53 +440,43 @@ export class SignalsService {
     }
 
     async sendSignal(signal) {
-        if (!this.telegramService) {
-            console.error('Telegram service not initialized');
+        if (!signal) return;
+
+        const lastSignal = this.lastSignals.get(signal.symbol);
+        const now = Date.now();
+        
+        // Check cooldown period
+        if (lastSignal && (now - new Date(lastSignal.time).getTime() < SIGNALS_CONFIG.SIGNALS.COOLDOWN_PERIOD)) {
             return;
         }
 
-        try {
-            const stopLoss = signal.type === 'BUY' ? signal.price * 0.98 : signal.price * 1.02;
-            const target1 = signal.type === 'BUY' ? signal.price * 1.03 : signal.price * 0.97;
-            const target2 = signal.type === 'BUY' ? signal.price * 1.05 : signal.price * 0.95;
-            const target3 = signal.type === 'BUY' ? signal.price * 1.08 : signal.price * 0.92;
-            
-            const message = `${signal.type === 'BUY' ? '🟢' : '🔴'} <b>SIGNAL ALERT: ${signal.type} ${signal.symbol}</b>\n\n` +
-                          `💰 <b>Entry Zone:</b> ${signal.price}\n` +
-                          `🛑 <b>Stop Loss:</b> ${stopLoss.toFixed(2)}\n` +
-                          `    • Risk: ${((Math.abs(signal.price - stopLoss) / signal.price) * 100).toFixed(2)}%\n` +
-                          `    • Position Size Recommendation: 1-2% of portfolio\n\n` +
-                          `🎯 <b>Targets:</b>\n` +
-                          `   1. ${target1.toFixed(2)} (${((Math.abs(target1 - signal.price) / signal.price) * 100).toFixed(2)}%)\n` +
-                          `   2. ${target2.toFixed(2)} (${((Math.abs(target2 - signal.price) / signal.price) * 100).toFixed(2)}%)\n` +
-                          `   3. ${target3.toFixed(2)} (${((Math.abs(target3 - signal.price) / signal.price) * 100).toFixed(2)}%)\n\n` +
-                          `📈 <b>Technical Indicators:</b>\n` +
-                          `   • RSI: ${signal.rsi.toFixed(2)}\n` +
-                          `   • EMA Fast(9): ${signal.emaFast.toFixed(2)}\n` +
-                          `   • EMA Slow(21): ${signal.emaSlow.toFixed(2)}\n` +
-                          `💎 <b>Volume:</b> ${signal.volumeRatio}x average\n\n` +
-                          `⚠️ <b>Risk Management Tips:</b>\n` +
-                          `• Use the recommended position size\n` +
-                          `• Consider scaling in/out of positions\n` +
-                          `• Move stop loss to break-even after first target\n` +
-                          `• Don't chase entry if price moves too far\n\n` +
-                          `🔗 <b>Trade on HTX:</b>\n` +
-                          `https://www.htx.com/invite/en-us/1f?invite_code=5duia223\n` +
-                          `• Up to 60% fee discount\n` +
-                          `• $10,000 welcome bonus\n` +
-                          `• Best liquidity & lowest fees\n\n` +
-                          `⚠️ <i>This is not financial advice. DYOR and trade responsibly.</i>\n` +
-                          `#${signal.symbol.replace('/', '')} #CryptoSignals #TradingSignals`;
-            
-            await this.telegramService.sendMessage(message);
-            console.log(`\n🎯 Signal sent for ${signal.symbol}: ${signal.type}`);
-            console.log(`   Price: ${signal.price}`);
-            console.log(`   RSI: ${signal.rsi.toFixed(2)}`);
-            console.log(`   EMAs: ${signal.emaFast.toFixed(2)} / ${signal.emaSlow.toFixed(2)}`);
-            console.log(`   Volume: ${signal.volumeRatio}x average\n`);
-        } catch (error) {
-            console.error('Error sending signal:', error);
-        }
+        // Store the signal
+        this.lastSignals.set(signal.symbol, signal);
+
+        // Format message for Telegram
+        const message = `🚨 *${signal.type} Signal*\n` +
+                      `🔸 *Pair:* ${signal.symbol}\n` +
+                      `🔹 *Price:* ${signal.price}\n` +
+                      `📊 *RSI:* ${signal.rsi.toFixed(2)}\n` +
+                      `📈 *Volume Ratio:* ${signal.volumeRatio}x\n` +
+                      `⏰ *Time:* ${new Date().toLocaleString()}`;
+
+        // Send to Telegram
+        await this.telegramService.sendMessage(message);
+        
+        // Broadcast to all connected WebSocket clients
+        const wsMessage = JSON.stringify({
+            type: 'signal',
+            data: signal
+        });
+        
+        this.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(wsMessage);
+            }
+        });
+
+        console.log(`${signal.type} signal sent for ${signal.symbol}`);
     }
 }
 
