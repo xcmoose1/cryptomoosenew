@@ -19,6 +19,32 @@
     margin-bottom: 20px;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.next-update {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(22, 24, 26, 0.7);
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.update-label {
+    color: var(--color-text-dim);
+}
+
+.countdown {
+    color: var(--color-primary);
+    font-family: 'Roboto Mono', monospace;
+    font-weight: 500;
+}
+
 .section-header h3 {
     color: var(--color-primary);
     font-size: 1.5rem;
@@ -192,9 +218,9 @@
 }
 
 @media (max-width: 768px) {
-    .altcoin-analysis-section {
-        margin: 20px 15px;
-        padding: 20px;
+    .header-right {
+        flex-direction: column;
+        gap: 10px;
     }
     
     .section-header {

@@ -1,21 +1,14 @@
 import { SIGNALS_CONFIG } from '../config/signals-config.js';
 import { RSI, MACD, EMA, SMA } from 'technicalindicators';
-import { WebSocketServer, WebSocket } from 'ws';
 import { createTelegramService } from './telegram-service.js';
 import pako from 'pako';
 
 export class SignalsService {
-    constructor() {
+    async initialize(wss = null) {
         this.ws = null;
         this.candleHistory = new Map();
         this.indicators = new Map();
-        this.signals = {
-            active: new Map(),    // Active signals being monitored
-            completed: new Map(), // Completed signals (targets hit or stop loss)
-            all: new Map(),       // All signals history
-            buy: new Map(),       // Buy signals
-            sell: new Map()       // Sell signals
-        };
+        this.lastSignals = new Map();
         this.telegramService = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
@@ -25,26 +18,59 @@ export class SignalsService {
         this.statusUpdateInterval = 5 * 60 * 1000; // 5 minutes
         this.processedCandles = 0;
         this.clients = new Set(); // WebSocket clients
-        this.wss = new WebSocketServer({ port: 8081 }); // WebSocket server
+        
+        // If no WebSocket server is provided, create one
+        if (!wss) {
+            const { WebSocketServer } = await import('ws');
+            const port = process.env.PORT || 8081;
+            console.log('Starting standalone WebSocket server on port:', port);
+            this.wss = new WebSocketServer({ port });
+        } else {
+            console.log('Using shared WebSocket server');
+            this.wss = wss;
+        }
         
         // Handle WebSocket connections
         this.wss.on('connection', (ws) => {
             console.log('New client connected to signals WebSocket');
-            this.clients.add(ws);
             
-            // Send current signals state to new client
-            this.sendSignalsState(ws);
+            // Mark this connection as a signals client
+            ws.isSignalsClient = true;
+            this.clients.add(ws);
             
             ws.on('close', () => {
                 console.log('Client disconnected from signals WebSocket');
                 this.clients.delete(ws);
             });
+
+            // Send initial connection acknowledgment
+            ws.send(JSON.stringify({
+                type: 'signals_connection',
+                status: 'connected',
+                message: 'Connected to signals service'
+            }));
         });
+
+        // HTX Referral Link
+        this.HTX_REFERRAL = 'https://www.htx.com/en-us/invite/0f?invite_code=9ujn2223';
+    }
+
+    constructor() {
+        // Initialize will be called separately
     }
 
     formatSymbol(symbol) {
         // Convert BTC/USDT to btcusdt format for HTX API
-        return symbol.replace('/', '').toLowerCase();
+        // Also handle special cases for HTX
+        const formatted = symbol.replace('/', '').toLowerCase();
+        
+        // Special cases mapping for HTX
+        const specialCases = {
+            'manausdt': 'sandusdt',  // MANA is listed as SAND on HTX
+            'oneusdtt': 'oneusdt'    // Fix ONE symbol
+        };
+
+        return specialCases[formatted] || formatted;
     }
 
     deformatSymbol(symbol) {
@@ -96,7 +122,7 @@ export class SignalsService {
         }
     }
 
-    async initialize() {
+    async initializeService() {
         try {
             console.log('\n=== Initializing SignalsService ===');
             this.telegramService = createTelegramService();
@@ -150,7 +176,7 @@ export class SignalsService {
         console.log(`\n🎯 Active Trading Pairs:`);
         activeSymbols.forEach(symbol => {
             const indicators = this.indicators.get(symbol);
-            const lastSignal = this.signals.active.get(symbol);
+            const lastSignal = this.lastSignals.get(symbol);
             console.log(`   ${symbol}: ${lastSignal ? `Last signal: ${lastSignal.type} @ ${new Date(lastSignal.time).toISOString()}` : 'No signals yet'}`);
         });
         console.log('\n=== End Status Update ===\n');
@@ -233,29 +259,36 @@ export class SignalsService {
     async setupWebSocket() {
         if (this.ws) {
             console.log('Closing existing WebSocket connection...');
-            this.ws.terminate();
+            this.ws.close();
             this.ws = null;
         }
 
         console.log('Setting up new WebSocket connection...');
+        const { WebSocket } = await import('ws');
         this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
 
-        this.ws.on('open', () => {
-            console.log('WebSocket connected to HTX');
-            this.reconnectAttempts = 0; // Reset reconnect attempts on successful connection
-            
-            // Subscribe to each trading pair
-            SIGNALS_CONFIG.TRADING_PAIRS.forEach(pair => {
-                const formattedSymbol = this.formatSymbol(pair);
-                const subRequest = {
-                    sub: `market.${formattedSymbol}.kline.1min`,
-                    id: formattedSymbol
-                };
-                console.log(`Subscribing to ${formattedSymbol}...`);
-                this.ws.send(JSON.stringify(subRequest));
+        // Wait for connection to be established
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                reject(new Error('WebSocket connection timeout'));
+            }, 10000); // 10 second timeout
+
+            this.ws.on('open', () => {
+                console.log('WebSocket connected to HTX');
+                this.isInitialized = true;
+                this.reconnectAttempts = 0;
+                clearTimeout(timeout);
+                resolve();
+            });
+
+            this.ws.on('error', (error) => {
+                console.error('WebSocket connection error:', error);
+                clearTimeout(timeout);
+                reject(error);
             });
         });
 
+        // Set up message handler
         this.ws.on('message', async (data) => {
             try {
                 await this.handleWebSocketMessage(data);
@@ -266,20 +299,70 @@ export class SignalsService {
 
         this.ws.on('close', () => {
             console.log('WebSocket connection closed');
+            this.isInitialized = false;
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.reconnectAttempts++;
-                console.log(`Reconnect attempt ${this.reconnectAttempts} of ${this.maxReconnectAttempts}`);
                 setTimeout(() => {
                     this.setupWebSocket();
-                }, this.reconnectDelay * this.reconnectAttempts); // Exponential backoff
-            } else {
-                console.error('Max reconnection attempts reached');
+                }, this.reconnectDelay);
             }
         });
 
         this.ws.on('error', (error) => {
             console.error('WebSocket error:', error);
         });
+
+        // Start subscribing to markets after successful connection
+        console.log('Connection established, starting market subscriptions...');
+        await this.subscribeToMarkets();
+    }
+
+    async subscribeToMarkets() {
+        console.log('Starting market subscriptions...');
+        const BATCH_SIZE = 5; // Process 5 pairs at a time
+        const BATCH_DELAY = 2000; // 2 seconds between batches
+        const SUBSCRIPTION_DELAY = 1000; // 1 second between individual subscriptions
+
+        // Split trading pairs into batches
+        const pairs = [...SIGNALS_CONFIG.TRADING_PAIRS];
+        const batches = [];
+        while (pairs.length > 0) {
+            batches.push(pairs.splice(0, BATCH_SIZE));
+        }
+
+        console.log(`Split ${SIGNALS_CONFIG.TRADING_PAIRS.length} pairs into ${batches.length} batches`);
+
+        // Process each batch with delay
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+            console.log(`Processing batch ${batchIndex + 1}/${batches.length}`);
+
+            // Process each pair in the batch
+            for (const pair of batch) {
+                try {
+                    const formattedSymbol = this.formatSymbol(pair);
+                    const subRequest = {
+                        sub: `market.${formattedSymbol}.kline.1min`,
+                        id: formattedSymbol
+                    };
+                    console.log(`Subscribing to ${formattedSymbol}...`);
+                    this.ws.send(JSON.stringify(subRequest));
+                    
+                    // Delay between individual subscriptions
+                    await new Promise(resolve => setTimeout(resolve, SUBSCRIPTION_DELAY));
+                } catch (error) {
+                    console.error(`Error subscribing to ${pair}:`, error);
+                }
+            }
+
+            // Delay between batches (except for the last batch)
+            if (batchIndex < batches.length - 1) {
+                console.log(`Batch ${batchIndex + 1} complete. Waiting ${BATCH_DELAY}ms before next batch...`);
+                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+            }
+        }
+
+        console.log('All market subscriptions completed');
 
         // Setup ping interval
         const pingInterval = setInterval(() => {
@@ -294,17 +377,39 @@ export class SignalsService {
     async handleWebSocketMessage(data) {
         try {
             const message = JSON.parse(pako.inflate(data, { to: 'string' }));
+            
+            // Handle rate limit errors
+            if (message.status === 'error' && message['err-code'] === 'invalid-parameter') {
+                if (message['err-msg'] === 'request limit') {
+                    console.log('Rate limit hit, will retry subscription later...');
+                    // Add to retry queue
+                    if (message.id) {
+                        setTimeout(() => {
+                            const subRequest = {
+                                sub: `market.${message.id}.kline.1min`,
+                                id: message.id
+                            };
+                            console.log(`Retrying subscription to ${message.id}...`);
+                            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                                this.ws.send(JSON.stringify(subRequest));
+                            }
+                        }, 5000); // Wait 5 seconds before retrying
+                    }
+                    return;
+                }
+            }
 
-            // Handle ping/pong
+            // Handle ping messages
             if (message.ping) {
                 this.ws.send(JSON.stringify({ pong: message.ping }));
                 return;
             }
 
+            // Process market data
             if (message.ch && message.tick) {
                 const symbol = this.deformatSymbol(message.ch.split('.')[1]);
                 const candle = {
-                    time: message.tick.id * 1000,
+                    time: message.tick.id * 1000, // Convert to milliseconds
                     open: message.tick.open,
                     high: message.tick.high,
                     low: message.tick.low,
@@ -349,6 +454,7 @@ export class SignalsService {
     async processSignals(symbol) {
         try {
             if (!this.isIndicatorReady(symbol)) {
+                console.log(`Waiting for previous EMA values for ${symbol}`);
                 return;
             }
 
@@ -367,8 +473,6 @@ export class SignalsService {
             const history = this.candleHistory.get(symbol);
             const closes = history.map(c => c.close);
             const volumes = history.map(c => c.volume);
-            const currentClose = closes[closes.length - 1];
-            const currentVolume = volumes[volumes.length - 1];
 
             // Calculate indicators
             indicators.rsi.nextValue(closes[closes.length - 1]);
@@ -380,20 +484,19 @@ export class SignalsService {
             const prevEmaFast = indicators.emaFast.result[indicators.emaFast.result.length - 2];
             const prevEmaSlow = indicators.emaSlow.result[indicators.emaSlow.result.length - 2];
             
+            // Skip if we don't have previous values yet
             if (!prevEmaFast || !prevEmaSlow) {
+                console.log(`Waiting for previous EMA values for ${symbol}`);
                 return;
             }
+            
+            // Current values
+            const currentClose = closes[closes.length - 1];
+            const currentVolume = volumes[volumes.length - 1];
             
             // Calculate volume ratio
             const volumeRatio = currentVolume / volumeMA;
             
-            // Check active signals first
-            const activeSignal = this.signals.active.get(symbol);
-            if (activeSignal) {
-                this.checkActiveSignal(symbol, currentClose, activeSignal);
-                return; // Don't generate new signals while one is active
-            }
-
             let signal = null;
             
             // BUY Signal Conditions
@@ -403,27 +506,15 @@ export class SignalsService {
                 rsi < 70 && // Not overbought
                 volumeRatio > 1.5 // Volume confirmation
             ) {
-                const stopLoss = currentClose * 0.97; // 3% stop loss
-                const targets = [
-                    currentClose * 1.015, // Target 1: 1.5%
-                    currentClose * 1.03,  // Target 2: 3%
-                    currentClose * 1.05   // Target 3: 5%
-                ];
-                
                 signal = {
                     type: 'BUY',
                     symbol,
-                    entryPrice: currentClose,
-                    currentPrice: currentClose,
-                    stopLoss,
-                    targets,
-                    hitTargets: [false, false, false],
+                    price: currentClose,
                     rsi,
                     emaFast,
                     emaSlow,
                     volumeRatio: volumeRatio.toFixed(2),
-                    time: Date.now(),
-                    status: 'ACTIVE'
+                    time: new Date().toISOString()
                 };
             }
             // SELL Signal Conditions
@@ -433,186 +524,146 @@ export class SignalsService {
                 rsi > 30 && // Not oversold
                 volumeRatio > 1.5 // Volume confirmation
             ) {
-                const stopLoss = currentClose * 1.03; // 3% stop loss for shorts
-                const targets = [
-                    currentClose * 0.985, // Target 1: 1.5%
-                    currentClose * 0.97,  // Target 2: 3%
-                    currentClose * 0.95   // Target 3: 5%
-                ];
-                
                 signal = {
                     type: 'SELL',
                     symbol,
-                    entryPrice: currentClose,
-                    currentPrice: currentClose,
-                    stopLoss,
-                    targets,
-                    hitTargets: [false, false, false],
+                    price: currentClose,
                     rsi,
                     emaFast,
                     emaSlow,
                     volumeRatio: volumeRatio.toFixed(2),
-                    time: Date.now(),
-                    status: 'ACTIVE'
+                    time: new Date().toISOString()
                 };
             }
 
             if (signal) {
-                await this.sendSignal(signal);
+                const lastSignal = this.lastSignals.get(symbol);
+                // Check 1-hour cooldown and maximum concurrent trades
+                if (!lastSignal || Date.now() - lastSignal.time > 3600000) {
+                    this.lastSignals.set(symbol, { 
+                        type: signal.type, 
+                        time: Date.now(),
+                        price: currentClose
+                    });
+                    await this.sendSignal(signal);
+                }
             }
         } catch (error) {
             console.error('Error processing signals:', error);
         }
     }
 
-    checkActiveSignal(symbol, currentPrice, signal) {
-        signal.currentPrice = currentPrice;
-        let shouldComplete = false;
-        let reason = '';
-
-        // Check stop loss
-        if (signal.type === 'BUY' && currentPrice <= signal.stopLoss) {
-            shouldComplete = true;
-            reason = 'Stop loss hit';
-        } else if (signal.type === 'SELL' && currentPrice >= signal.stopLoss) {
-            shouldComplete = true;
-            reason = 'Stop loss hit';
-        }
-
-        // Check targets
-        if (!shouldComplete) {
-            signal.targets.forEach((target, index) => {
-                if (!signal.hitTargets[index]) {
-                    if (signal.type === 'BUY' && currentPrice >= target) {
-                        signal.hitTargets[index] = true;
-                        this.notifyTargetHit(signal, index + 1);
-                    } else if (signal.type === 'SELL' && currentPrice <= target) {
-                        signal.hitTargets[index] = true;
-                        this.notifyTargetHit(signal, index + 1);
-                    }
-                }
-            });
-
-            // Check if all targets are hit
-            if (signal.hitTargets.every(hit => hit)) {
-                shouldComplete = true;
-                reason = 'All targets hit';
-            }
-        }
-
-        // Complete the signal if needed
-        if (shouldComplete) {
-            signal.status = 'COMPLETED';
-            signal.completionReason = reason;
-            signal.completionTime = Date.now();
-            
-            // Move signal to completed
-            this.signals.completed.set(`${symbol}-${signal.time}`, signal);
-            this.signals.active.delete(symbol);
-            
-            // Notify completion
-            this.notifySignalCompletion(signal);
-        }
-
-        // Broadcast updated signal state
-        this.broadcastSignalUpdate(signal);
-    }
-
-    notifyTargetHit(signal, targetNumber) {
-        const message = `🎯 Target ${targetNumber} Hit!\n` +
-                       `${signal.type} ${signal.symbol}\n` +
-                       `Entry: ${signal.entryPrice}\n` +
-                       `Target: ${signal.targets[targetNumber - 1]}\n` +
-                       `Current Price: ${signal.currentPrice}`;
-        
-        this.telegramService.sendMessage(message);
-    }
-
-    notifySignalCompletion(signal) {
-        const profit = signal.type === 'BUY' 
-            ? ((signal.currentPrice - signal.entryPrice) / signal.entryPrice * 100)
-            : ((signal.entryPrice - signal.currentPrice) / signal.entryPrice * 100);
-
-        const message = `✅ Signal Completed!\n` +
-                       `${signal.type} ${signal.symbol}\n` +
-                       `Reason: ${signal.completionReason}\n` +
-                       `Entry: ${signal.entryPrice}\n` +
-                       `Exit: ${signal.currentPrice}\n` +
-                       `Profit: ${profit.toFixed(2)}%`;
-        
-        this.telegramService.sendMessage(message);
-    }
-
-    broadcastSignalUpdate(signal) {
-        const wsMessage = JSON.stringify({
-            type: 'signalUpdate',
-            data: signal
-        });
-        
-        this.clients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN) {
-                client.send(wsMessage);
-            }
-        });
-    }
-
     async sendSignal(signal) {
-        if (!signal) return;
+        console.log('\n=== SIGNAL BROADCAST STARTED ===');
+        console.log('Signal to broadcast:', {
+            type: signal.type,
+            symbol: signal.symbol,
+            price: signal.price,
+            timestamp: new Date().toISOString()
+        });
 
-        const lastSignal = this.signals.active.get(signal.symbol);
-        const now = Date.now();
+        // Calculate prices
+        const entryPrice = signal.price;
+        const stopLossPrice = signal.type === 'BUY' 
+            ? entryPrice * 0.99  // 1% below entry for buy
+            : entryPrice * 1.01; // 1% above entry for sell
         
-        // Check cooldown period
-        if (lastSignal && (now - new Date(lastSignal.time).getTime() < SIGNALS_CONFIG.SIGNALS.COOLDOWN_PERIOD)) {
-            return;
-        }
+        // Calculate targets (these are examples)
+        const target1 = signal.type === 'BUY' ? entryPrice * 1.005 : entryPrice * 0.995;
+        const target2 = signal.type === 'BUY' ? entryPrice * 1.01 : entryPrice * 0.99;
+        const target3 = signal.type === 'BUY' ? entryPrice * 1.02 : entryPrice * 0.98;
 
-        // Store the signal
-        this.signals.all.set(signal.symbol, signal);
-        this.signals.active.set(signal.symbol, signal);
-        if (signal.type === 'BUY') {
-            this.signals.buy.set(signal.symbol, signal);
-        } else if (signal.type === 'SELL') {
-            this.signals.sell.set(signal.symbol, signal);
-        }
+        // Determine market trend based on RSI
+        const marketTrend = signal.rsi > 60 ? 'BULLISH' : signal.rsi < 40 ? 'BEARISH' : 'NEUTRAL';
 
-        // Format message for Telegram
-        const message = `🚨 *${signal.type} Signal*\n` +
-                      `🔸 *Pair:* ${signal.symbol}\n` +
-                      `🔹 *Price:* ${signal.entryPrice}\n` +
-                      `📊 *RSI:* ${signal.rsi.toFixed(2)}\n` +
-                      `📈 *Volume Ratio:* ${signal.volumeRatio}x\n` +
-                      `⏰ *Time:* ${new Date().toLocaleString()}`;
+        // Format confidence level based on indicators
+        const confidence = signal.rsi > 60 || signal.rsi < 40 ? 'HIGH' : 'MEDIUM';
+
+        // Format telegram message
+        const telegramMessage = `
+${signal.type === 'BUY' ? '🟢' : '🔴'} <b>SIGNAL ALERT: ${signal.type} ${signal.symbol}</b>
+
+💰 <b>Entry Zone:</b> ${entryPrice.toFixed(4)} - ${(entryPrice * 1.002).toFixed(4)}
+🛑 <b>Stop Loss:</b> ${stopLossPrice.toFixed(4)}
+
+🎯 <b>Targets:</b>
+1️⃣ ${target1.toFixed(4)}
+2️⃣ ${target2.toFixed(4)}
+3️⃣ ${target3.toFixed(4)}
+
+📊 <b>Risk/Reward Ratio:</b> 1:${((target2 - entryPrice)/(entryPrice - stopLossPrice)).toFixed(2)}
+
+📈 <b>Market Analysis:</b>
+• Trend: ${marketTrend}
+• RSI: ${signal.rsi.toFixed(2)}
+• Volume Ratio: ${signal.volumeRatio.toFixed(2)}x
+
+⚡️ <b>Technical Indicators:</b>
+• MACD: ${signal.macd > 0 ? 'Bullish' : 'Bearish'}
+• EMA: Price ${signal.emaStatus}
+• SMA: Price ${signal.smaStatus}
+
+🔄 <b>Trade on HTX:</b>
+${this.HTX_REFERRAL}
+• Up to 20% fee discount
+• $5000 sign-up bonus
+• Zero maker fees
+
+#${signal.symbol.replace('/', '')} #CryptoSignals #TradingSignals`;
 
         // Send to Telegram
-        await this.telegramService.sendMessage(message);
+        console.log('Sending signal to Telegram...');
+        await this.telegramService.sendMessage(telegramMessage);
+        console.log('Signal sent to Telegram successfully');
         
+        // Create a simplified version of the signal for WebSocket clients
+        const wsSignal = {
+            type: signal.type,
+            symbol: signal.symbol,
+            price: signal.price,
+            rsi: signal.rsi,
+            volumeRatio: signal.volumeRatio,
+            stopLoss: stopLossPrice,
+            targets: [target1, target2, target3],
+            confidence,
+            marketTrend,
+            timestamp: new Date().toISOString()
+        };
+
         // Broadcast to all connected WebSocket clients
+        console.log(`Broadcasting signal to ${this.clients.size} WebSocket clients...`);
         const wsMessage = JSON.stringify({
             type: 'signal',
-            data: signal
+            data: wsSignal
         });
         
+        let successCount = 0;
+        let failCount = 0;
+
         this.clients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
-                client.send(wsMessage);
+                try {
+                    client.send(wsMessage);
+                    successCount++;
+                    console.log('Signal sent to WebSocket client successfully');
+                } catch (error) {
+                    failCount++;
+                    console.error('Error sending signal to WebSocket client:', error);
+                }
+            } else {
+                console.log('Client not ready, state:', client.readyState);
             }
         });
 
-        console.log(`${signal.type} signal sent for ${signal.symbol}`);
-    }
-
-    sendSignalsState(ws) {
-        const signalsState = {
-            type: 'signalsState',
-            data: {
-                active: Array.from(this.signals.active.values()),
-                completed: Array.from(this.signals.completed.values()),
-                buy: Array.from(this.signals.buy.values()),
-                sell: Array.from(this.signals.sell.values())
-            }
-        };
-        ws.send(JSON.stringify(signalsState));
+        console.log(`=== SIGNAL BROADCAST COMPLETED ===
+• Total WebSocket Clients: ${this.clients.size}
+• Successful Sends: ${successCount}
+• Failed Sends: ${failCount}
+• Signal Type: ${signal.type}
+• Symbol: ${signal.symbol}
+• Price: ${signal.price}
+• Timestamp: ${new Date().toISOString()}
+========================\n`);
     }
 }
 

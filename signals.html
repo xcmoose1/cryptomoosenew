@@ -306,25 +306,15 @@
             font-size: 0.9rem;
         }
 
-        .signals-container {
-            margin-top: 2rem;
-        }
-
-        .signals-header {
-            background: #1a1d1e;
-            border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-        }
-
-        .tab-container {
+        .signals-nav {
             display: flex;
             gap: 1rem;
-            padding: 0.5rem 1rem;
+            margin-bottom: 2rem;
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 1rem;
         }
 
-        .tab-button {
+        .signals-nav button {
             background: none;
             border: none;
             color: rgba(255, 255, 255, 0.7);
@@ -335,12 +325,12 @@
             transition: all 0.2s ease;
         }
 
-        .tab-button:hover {
+        .signals-nav button:hover {
             background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
         }
 
-        .tab-button.active {
+        .signals-nav button.active {
             background: rgba(255, 255, 255, 0.1);
             color: #ffffff;
         }
@@ -352,149 +342,63 @@
         }
 
         .signal-card {
-            background: #1a1d1e;
+            background: #0f1112;
             border-radius: 12px;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .signal-card.completed {
-            opacity: 0.8;
-        }
-
-        .signal-header {
+            padding: 1.5rem;
             display: flex;
-            align-items: center;
+            flex-direction: column;
             gap: 1rem;
-            margin-bottom: 1rem;
-            padding-bottom: 0.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .signal-type {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-weight: 500;
-            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
         }
 
         .signal-type.buy {
-            background: rgba(0, 255, 0, 0.1);
-            color: #00ff00;
+            background: rgba(0, 255, 157, 0.1);
+            color: #00ff9d;
         }
 
         .signal-type.sell {
-            background: rgba(255, 0, 0, 0.1);
-            color: #ff0000;
+            background: rgba(255, 59, 48, 0.1);
+            color: #ff3b30;
         }
 
-        .signal-symbol {
-            font-weight: 500;
-            color: #ffffff;
+        .signal-pair {
+            font-size: 1.2rem;
+            font-weight: 600;
         }
 
-        .signal-status {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.8rem;
-            margin-left: auto;
-        }
-
-        .signal-status.active {
-            background: rgba(0, 255, 157, 0.1);
-            color: #00ff9d;
-        }
-
-        .signal-status.completed {
-            background: rgba(255, 255, 255, 0.1);
-            color: #ffffff;
-        }
-
-        .price-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-        }
-
-        .entry-price, .current-price {
+        .signal-price {
             font-family: 'Roboto Mono', monospace;
+            color: rgba(255, 255, 255, 0.7);
         }
 
-        .current-price.profit {
-            color: #00ff9d;
-        }
-
-        .current-price.loss {
-            color: #ff4d4d;
-        }
-
-        .profit-loss {
-            font-size: 0.9rem;
-            margin-left: 0.5rem;
-        }
-
-        .stop-loss {
-            color: #ff4d4d;
-            font-family: 'Roboto Mono', monospace;
-            margin-bottom: 1rem;
-        }
-
-        .targets-container {
+        .signal-time {
             display: flex;
-            flex-direction: column;
+            align-items: center;
             gap: 0.5rem;
-        }
-
-        .target {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 0.5rem;
-            border-radius: 8px;
-        }
-
-        .target.hit {
-            background: rgba(0, 255, 157, 0.1);
-        }
-
-        .target-label {
-            font-size: 0.8rem;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 0.25rem;
-        }
-
-        .target-price {
-            font-family: 'Roboto Mono', monospace;
-            margin-bottom: 0.25rem;
-        }
-
-        .progress-bar {
-            height: 4px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 2px;
-            overflow: hidden;
-        }
-
-        .progress {
-            height: 100%;
-            background: #00ff9d;
-            transition: width 0.3s ease;
-        }
-
-        .completion-info {
-            margin-top: 1rem;
-            padding-top: 1rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .completion-reason {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.9rem;
-        }
-
-        .completion-time {
             color: rgba(255, 255, 255, 0.5);
             font-size: 0.8rem;
-            margin-top: 0.25rem;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ff3b30;
+            transition: background-color 0.2s ease;
+        }
+
+        .status-indicator.connected {
+            background: #00ff9d;
         }
 
         .connection-status {
@@ -608,6 +512,56 @@
                     Scanning
                 </div>
                 <div class="pair-list">
+                    <div class="pair-item">
+                        <span class="pair-name">SUI/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">UNI/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">BTC/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">ETH/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">SOL/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">AVAX/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">MATIC/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">LINK/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">DOT/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
+                    <div class="pair-item">
+                        <span class="pair-name">ADA/USDT</span>
+                        <span class="pair-price">Loading...</span>
+                        <span class="pair-change">0.00%</span>
+                    </div>
                 </div>
             </div>
 
@@ -628,17 +582,16 @@
                 <p class="content-description">Advanced multi-indicator signals for major cryptocurrency pairs</p>
             </div>
 
-            <div class="signals-container">
-                <div class="signals-header">
-                    <div class="tab-container">
-                        <button class="tab-button active" data-tab="all">All Signals</button>
-                        <button class="tab-button" data-tab="active">Active Signals</button>
-                        <button class="tab-button" data-tab="completed">Completed</button>
-                        <button class="tab-button" data-tab="buy">Buy Signals</button>
-                        <button class="tab-button" data-tab="sell">Sell Signals</button>
-                    </div>
-                </div>
-                <div class="signals-grid" id="signals-grid"></div>
+            <div class="signals-nav">
+                <button class="active">All Signals</button>
+                <button>Active Signals</button>
+                <button>Completed</button>
+                <button>Buy Signals</button>
+                <button>Sell Signals</button>
+            </div>
+
+            <div class="signals-grid">
+                <!-- Signal cards will be added dynamically -->
             </div>
         </div>
     </div>
@@ -652,14 +605,6 @@
         let ws;
         let signalsWs;
         const pairPrices = new Map();
-        const signals = {
-            active: new Map(),
-            completed: new Map(),
-            buy: new Map(),
-            sell: new Map(),
-            all: new Map()
-        };
-
         const tradingPairs = [
             'BTC/USDT', 'HBAR/USDT', 'TON/USDT', 'ALGO/USDT', 'GRT/USDT',
             'CHZ/USDT', 'VET/USDT', 'MANA/USDT', 'ZIL/USDT', 'IOTA/USDT',
@@ -679,53 +624,65 @@
         script.src = 'https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js';
         document.head.appendChild(script);
 
+        function getWebSocketUrl() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const host = window.location.host || 'localhost:3000';
+            return `${protocol}//${host}`;
+        }
+
         function connectSignalsWebSocket() {
             console.log('Connecting to Signals WebSocket...');
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const host = window.location.hostname;
-            const port = window.location.port ? `:${window.location.port}` : '';
-            const wsUrl = `${protocol}//${host}${port}`;
-
+            const wsUrl = getWebSocketUrl();
+            console.log('WebSocket URL:', wsUrl);
             signalsWs = new WebSocket(wsUrl);
 
             signalsWs.onopen = () => {
                 console.log('Connected to Signals WebSocket');
-                document.querySelector('.status-indicator').classList.add('connected');
-                document.querySelector('.status-text').textContent = 'Connected';
+                document.querySelector('.status-text').textContent = 'Connected to Signals';
             };
 
             signalsWs.onmessage = (event) => {
+                console.log('Raw message received:', event.data); // Debug log
                 try {
                     const message = JSON.parse(event.data);
-                    if (message.type === 'signal' || message.type === 'signalUpdate') {
-                        handleSignalUpdate(message.data);
-                    } else if (message.type === 'signalsState') {
-                        // Initialize signals state
-                        Object.entries(message.data).forEach(([category, categorySignals]) => {
-                            categorySignals.forEach(signal => {
-                                signals[category].set(
-                                    signal.status === 'COMPLETED' ? `${signal.symbol}-${signal.time}` : signal.symbol,
-                                    signal
-                                );
-                            });
-                        });
-                        updateSignalsGrid('all');
+                    console.log('Parsed message:', message); // Debug log
+                    
+                    if (message.type === 'signal') {
+                        const signal = message.data;
+                        console.log('Processing signal:', signal); // Debug log
+                        
+                        // Add signal to the grid
+                        const signalsGrid = document.querySelector('.signals-grid');
+                        if (!signalsGrid) {
+                            console.error('signals-grid element not found!');
+                            return;
+                        }
+                        const signalCard = createSignalCard(signal);
+                        console.log('Created signal card:', signalCard); // Debug log
+                        signalsGrid.insertAdjacentHTML('afterbegin', signalCard);
+                        
+                        // Keep only the last 50 signals
+                        const cards = signalsGrid.children;
+                        if (cards.length > 50) {
+                            signalsGrid.removeChild(cards[cards.length - 1]);
+                        }
                     }
                 } catch (error) {
                     console.error('Error processing signals message:', error);
+                    console.error('Raw message that caused error:', event.data);
                 }
             };
 
-            signalsWs.onclose = () => {
-                console.log('Signals WebSocket connection closed');
-                document.querySelector('.status-indicator').classList.remove('connected');
-                document.querySelector('.status-text').textContent = 'Disconnected';
+            signalsWs.onclose = (event) => {
+                console.log('Signals WebSocket connection closed:', event.code, event.reason);
+                document.querySelector('.status-text').textContent = 'Disconnected - Reconnecting...';
                 // Reconnect after 5 seconds
                 setTimeout(connectSignalsWebSocket, 5000);
             };
 
             signalsWs.onerror = (error) => {
                 console.error('Signals WebSocket error:', error);
+                document.querySelector('.status-text').textContent = 'Connection Error';
             };
         }
 
@@ -738,12 +695,12 @@
                 console.log('Connected to WebSocket');
                 const statusIndicator = document.querySelector('.status-indicator');
                 const statusText = document.querySelector('.status-text');
-
+                
                 if (statusIndicator && statusText) {
                     statusIndicator.classList.add('connected');
                     statusText.textContent = 'Connected';
                 }
-
+                
                 reconnectAttempts = 0;
 
                 // Subscribe to market data for all pairs with a slight delay between each
@@ -766,7 +723,7 @@
                         const textDecoder = new TextDecoder('utf-8');
                         const decompressed = pako.inflate(new Uint8Array(event.data), { to: 'string' });
                         data = JSON.parse(decompressed);
-
+                        
                         // Debug log for price updates
                         if (data.tick) {
                             console.log(`Price Update - Symbol: ${data.ch.split('.')[1]}, Price: ${data.tick.close}`);
@@ -781,14 +738,14 @@
                         // Extract symbol from channel name
                         const symbol = data.ch.split('.')[1].toUpperCase();
                         const formattedSymbol = symbol.slice(0, -4) + '/' + symbol.slice(-4);
-
+                        
                         // Update price
                         const oldPrice = pairPrices.get(formattedSymbol)?.value || data.tick.close;
                         pairPrices.set(formattedSymbol, {
                             value: data.tick.close,
                             change: data.tick.close - oldPrice
                         });
-
+                        
                         // Update UI
                         updatePairsList();
                     }
@@ -800,12 +757,12 @@
             ws.onclose = () => {
                 const statusIndicator = document.querySelector('.status-indicator');
                 const statusText = document.querySelector('.status-text');
-
+                
                 if (statusIndicator && statusText) {
                     statusIndicator.classList.remove('connected');
                     statusText.textContent = 'Disconnected';
                 }
-
+                
                 if (reconnectAttempts < maxReconnectAttempts) {
                     reconnectAttempts++;
                     setTimeout(connectWebSocket, 5000);
@@ -818,26 +775,26 @@
         }
 
         function updatePairsList() {
-            const pairsContainer = document.querySelector('.pair-list');
-            if (!pairsContainer) return;
+            const pairList = document.querySelector('.pair-list');
+            pairList.innerHTML = '';
 
-            pairsContainer.innerHTML = '';
             tradingPairs.forEach(pair => {
+                const symbol = pair.split('/')[0]; // Get the base currency (e.g., 'BTC' from 'BTC/USDT')
                 const pairItem = document.createElement('div');
                 pairItem.className = 'pair-item';
                 const price = pairPrices.get(pair);
                 const priceClass = price?.change > 0 ? 'price-up' : price?.change < 0 ? 'price-down' : 'price-unchanged';
-
+                
                 pairItem.innerHTML = `
                     <div class="pair-name">
                         <i class="fas fa-chart-line"></i>
-                        ${pair}
+                        ${symbol}
                     </div>
                     <div class="pair-price ${priceClass}">
-                        ${price ? price.value.toFixed(6) : '0.000000'}
+                        ${price ? formatPrice(price.value) : '---'}
                     </div>
                 `;
-                pairsContainer.appendChild(pairItem);
+                pairList.appendChild(pairItem);
             });
         }
 
@@ -852,113 +809,29 @@
         }
 
         function createSignalCard(signal) {
-            const profitClass = signal.type === 'BUY'
-                ? (signal.currentPrice > signal.entryPrice ? 'profit' : 'loss')
-                : (signal.currentPrice < signal.entryPrice ? 'profit' : 'loss');
-
-            const profit = signal.type === 'BUY'
-                ? ((signal.currentPrice - signal.entryPrice) / signal.entryPrice * 100)
-                : ((signal.entryPrice - signal.currentPrice) / signal.entryPrice * 100);
-
-            const targetsHtml = signal.targets.map((target, index) => {
-                const hitClass = signal.hitTargets[index] ? 'hit' : '';
-                const progress = signal.type === 'BUY'
-                    ? Math.min(100, Math.max(0, (signal.currentPrice - signal.entryPrice) / (target - signal.entryPrice) * 100))
-                    : Math.min(100, Math.max(0, (signal.entryPrice - signal.currentPrice) / (signal.entryPrice - target) * 100));
-
-                return `
-                    <div class="target ${hitClass}">
-                        <div class="target-label">Target ${index + 1}</div>
-                        <div class="target-price">${target.toFixed(4)}</div>
-                        <div class="progress-bar">
-                            <div class="progress" style="width: ${progress}%"></div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-
             return `
-                <div class="signal-card ${signal.status.toLowerCase()} ${signal.type.toLowerCase()}" data-symbol="${signal.symbol}">
-                    <div class="signal-header">
-                        <span class="signal-type ${signal.type.toLowerCase()}">${signal.type}</span>
-                        <span class="signal-symbol">${signal.symbol}</span>
-                        <span class="signal-status ${signal.status.toLowerCase()}">${signal.status}</span>
+                <div class="signal-card">
+                    <div class="signal-type ${signal.type.toLowerCase()}">
+                        <i class="fas fa-${signal.type.toLowerCase() === 'BUY' ? 'arrow-up' : 'arrow-down'}"></i>
+                        ${signal.type}
                     </div>
-                    <div class="signal-body">
-                        <div class="price-info">
-                            <div class="entry-price">Entry: ${signal.entryPrice.toFixed(4)}</div>
-                            <div class="current-price ${profitClass}">
-                                Current: ${signal.currentPrice.toFixed(4)}
-                                <span class="profit-loss">(${profit.toFixed(2)}%)</span>
-                            </div>
-                        </div>
-                        <div class="stop-loss">
-                            Stop Loss: ${signal.stopLoss.toFixed(4)}
-                        </div>
-                        <div class="targets-container">
-                            ${targetsHtml}
-                        </div>
-                        ${signal.status === 'COMPLETED' ? `
-                            <div class="completion-info">
-                                <div class="completion-reason">${signal.completionReason}</div>
-                                <div class="completion-time">${new Date(signal.completionTime).toLocaleString()}</div>
-                            </div>
-                        ` : ''}
+                    <div class="signal-pair">${signal.symbol}</div>
+                    <div class="signal-price">Entry: ${signal.price}</div>
+                    <div class="signal-indicators">
+                        <div>RSI: ${signal.rsi.toFixed(2)}</div>
+                        <div>Volume: ${signal.volumeRatio}x</div>
+                    </div>
+                    <div class="signal-time">
+                        <i class="far fa-clock"></i>
+                        ${new Date().toLocaleString()}
                     </div>
                 </div>
             `;
         }
 
-        function updateSignalsGrid(activeTab = 'all') {
-            const grid = document.getElementById('signals-grid');
-            grid.innerHTML = ''; // Clear existing signals
-
-            let signalsToShow;
-            switch (activeTab) {
-                case 'active':
-                    signalsToShow = Array.from(signals.active.values());
-                    break;
-                case 'completed':
-                    signalsToShow = Array.from(signals.completed.values());
-                    break;
-                case 'buy':
-                    signalsToShow = Array.from(signals.buy.values());
-                    break;
-                case 'sell':
-                    signalsToShow = Array.from(signals.sell.values());
-                    break;
-                default: // 'all'
-                    signalsToShow = Array.from(signals.all.values());
-            }
-
-            // Sort signals by time, newest first
-            signalsToShow.sort((a, b) => b.time - a.time);
-
-            signalsToShow.forEach(signal => {
-                const signalCard = createSignalCard(signal);
-                grid.insertAdjacentHTML('beforeend', signalCard);
-            });
-        }
-
-        function handleSignalUpdate(signal) {
-            // Update signal in appropriate categories
-            if (signal.status === 'ACTIVE') {
-                signals.active.set(signal.symbol, signal);
-                if (signal.type === 'BUY') {
-                    signals.buy.set(signal.symbol, signal);
-                } else {
-                    signals.sell.set(signal.symbol, signal);
-                }
-            } else if (signal.status === 'COMPLETED') {
-                signals.completed.set(`${signal.symbol}-${signal.time}`, signal);
-                signals.active.delete(signal.symbol);
-            }
-
-            signals.all.set(`${signal.symbol}-${signal.time}`, signal);
-
-            // Update the display
-            const activeTab = document.querySelector('.tab-button.active').dataset.tab;
-            updateSignalsGrid(activeTab);
+        function updateSignalsGrid(signals) {
+            const signalsGrid = document.querySelector('.signals-grid');
+            signalsGrid.innerHTML = signals.map(signal => createSignalCard(signal)).join('');
         }
 
         let reconnectAttempts = 0;
@@ -975,11 +848,11 @@
             updateSignalsGrid(exampleSignals);
 
             // Handle navigation buttons
-            document.querySelectorAll('.tab-button').forEach(button => {
+            const navButtons = document.querySelectorAll('.signals-nav button');
+            navButtons.forEach(button => {
                 button.addEventListener('click', () => {
-                    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                    navButtons.forEach(btn => btn.classList.remove('active'));
                     button.classList.add('active');
-                    updateSignalsGrid(button.dataset.tab);
                 });
             });
         });

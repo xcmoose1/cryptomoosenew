@@ -106,6 +106,15 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
+// Initialize services
+async function initializeServices() {
+    // Initialize SignalsService with the main WebSocket server
+    const signalsService = new (await import('../signals/services/signals-service.js')).SignalsService();
+    await signalsService.initialize(wss);
+    await signalsService.initializeService();
+    return signalsService;
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -185,17 +194,12 @@ app.get('/daily-digest', (req, res) => {
 });
 
 // WebSocket connection handling
-wss.on('connection', (ws) => {
-    console.log('New WebSocket connection established');
-
+wss.on('connection', (ws, req) => {
+    console.log('New WebSocket connection');
     ws.isAlive = true;
+
     ws.on('pong', () => {
         ws.isAlive = true;
-    });
-
-    // Handle connection errors
-    ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
     });
 
     // Handle connection close
@@ -256,15 +260,15 @@ const HTX_TIMEFRAMES = {
     '1M': '1mon'
 };
 
-// Health check endpoint for Render
-app.get('/healthz', (req, res) => {
-    res.status(200).json({ status: 'healthy' });
-});
-
-// Start the server
+// Initialize services and start server
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+initializeServices().then(signalsService => {
+    server.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+}).catch(error => {
+    console.error('Error initializing services:', error);
+    process.exit(1);
 });
 
 // Handle server shutdown gracefully

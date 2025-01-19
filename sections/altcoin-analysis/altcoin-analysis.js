@@ -8,6 +8,8 @@ class AltcoinAnalysisSection {
         console.log('AltcoinAnalysisSection: Constructor called');
         this.initialized = false;
         this.updateInterval = null;
+        this.countdownInterval = null;
+        this.lastUpdateTime = null;
     }
 
     async init() {
@@ -30,6 +32,54 @@ class AltcoinAnalysisSection {
         }
     }
 
+    startPeriodicUpdates() {
+        console.log('AltcoinAnalysisSection: Starting periodic updates...');
+        // Update every 6 hours
+        this.updateInterval = setInterval(() => this.updateAllData(), COINGECKO_CONFIG.UPDATE_INTERVAL);
+        // Start countdown timer
+        this.startCountdown();
+    }
+
+    startCountdown() {
+        console.log('AltcoinAnalysisSection: Starting countdown timer...');
+        // Clear existing interval if any
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
+        }
+
+        // Set last update time if not set
+        if (!this.lastUpdateTime) {
+            this.lastUpdateTime = Date.now();
+        }
+
+        // Update countdown every second
+        this.countdownInterval = setInterval(() => {
+            const now = Date.now();
+            const nextUpdate = this.lastUpdateTime + COINGECKO_CONFIG.UPDATE_INTERVAL;
+            const timeLeft = nextUpdate - now;
+
+            if (timeLeft <= 0) {
+                // Time to update
+                this.lastUpdateTime = now;
+                this.updateCountdownDisplay(COINGECKO_CONFIG.UPDATE_INTERVAL);
+            } else {
+                this.updateCountdownDisplay(timeLeft);
+            }
+        }, 1000);
+    }
+
+    updateCountdownDisplay(timeLeft) {
+        const hours = Math.floor(timeLeft / (60 * 60 * 1000));
+        const minutes = Math.floor((timeLeft % (60 * 60 * 1000)) / (60 * 1000));
+        const seconds = Math.floor((timeLeft % (60 * 1000)) / 1000);
+
+        const display = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        const element = document.getElementById('updateCountdown');
+        if (element) {
+            element.textContent = display;
+        }
+    }
+
     async updateAllData() {
         console.log('AltcoinAnalysisSection: Updating all data...');
         try {
@@ -40,16 +90,12 @@ class AltcoinAnalysisSection {
                 this.updateMarketTrends(),
                 this.generateMarketOverview()
             ]);
+            // Update last update time
+            this.lastUpdateTime = Date.now();
             console.log('AltcoinAnalysisSection: All data updated successfully');
         } catch (error) {
             console.error('AltcoinAnalysisSection: Failed to update altcoin data:', error);
         }
-    }
-
-    startPeriodicUpdates() {
-        console.log('AltcoinAnalysisSection: Starting periodic updates...');
-        // Update every 24 hours like market overview
-        this.updateInterval = setInterval(() => this.updateAllData(), COINGECKO_CONFIG.UPDATE_INTERVAL);
     }
 
     async updateMarketMetrics() {
@@ -182,6 +228,9 @@ class AltcoinAnalysisSection {
         console.log('AltcoinAnalysisSection: Destroying...');
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
+        }
+        if (this.countdownInterval) {
+            clearInterval(this.countdownInterval);
         }
     }
 }
