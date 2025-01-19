@@ -242,4 +242,33 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get latest digest data
+router.get('/latest', async (req, res) => {
+    try {
+        // Get news data
+        const newsData = await fetchNewsFromSources();
+        
+        // Generate digest if cache is empty or expired
+        if (!cache.data || !cache.timestamp || (Date.now() - cache.timestamp > CACHE_DURATION)) {
+            const digest = await generateDigestWithGPT4(newsData);
+            cache.data = digest;
+            cache.timestamp = Date.now();
+        }
+        
+        res.json({
+            timestamp: cache.timestamp,
+            highlights: cache.data.highlights || [],
+            marketSummary: cache.data.marketSummary || '',
+            policyUpdates: cache.data.policyUpdates || [],
+            technicalAnalysis: cache.data.technicalAnalysis || ''
+        });
+    } catch (error) {
+        console.error('Error getting latest digest:', error);
+        res.status(500).json({
+            error: 'Failed to get latest digest',
+            details: error.message
+        });
+    }
+});
+
 export default router;

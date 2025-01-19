@@ -194,6 +194,97 @@
             border-radius: 2px;
             transition: width 0.3s ease;
         }
+
+        /* Calculator Hub Card Styles */
+        .calc-hub-card {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, rgba(0, 255, 157, 0.1), rgba(0, 0, 0, 0));
+            border: 1px solid rgba(0, 255, 157, 0.2);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .calc-hub-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        .calc-hub-info {
+            padding-right: 2rem;
+        }
+
+        .calc-hub-title {
+            font-size: 1.8rem;
+            color: var(--color-primary);
+            margin-bottom: 1rem;
+        }
+
+        .calc-hub-description {
+            color: var(--color-text-dim);
+            margin-bottom: 1.5rem;
+            font-size: 1.1rem;
+            line-height: 1.6;
+        }
+
+        .calc-tools-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            list-style: none;
+            padding: 0;
+        }
+
+        .calc-tool-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .calc-tool-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .calc-tool-item i {
+            font-size: 1.5rem;
+            color: var(--color-primary);
+        }
+
+        .calc-tool-item span {
+            font-size: 1rem;
+            color: var(--color-text);
+        }
+
+        .calc-hub-action {
+            margin-top: 2rem;
+            text-align: center;
+        }
+
+        .calc-hub-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: var(--color-primary);
+            color: #000;
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+        }
+
+        .calc-hub-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 255, 157, 0.2);
+        }
     </style>
 </head>
 <body>
@@ -237,6 +328,40 @@
     <div class="learning-container">
         <h1>Learning Hub</h1>
         <div class="course-grid">
+            <!-- Calculator Hub Card -->
+            <div class="calc-hub-card">
+                <div class="calc-hub-content">
+                    <div class="calc-hub-info">
+                        <h2 class="calc-hub-title">Learning & Tools Hub</h2>
+                        <p class="calc-hub-description">Enhance your crypto knowledge with our comprehensive suite of educational resources and practical tools. From yield calculations to risk assessment, everything you need to make informed decisions.</p>
+                        <div class="calc-hub-action">
+                            <a href="crypto-calc.html" class="calc-hub-btn">
+                                <span>Access Tools Hub</span>
+                                <i class="fas fa-calculator"></i>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="calc-tools-list">
+                        <div class="calc-tool-item">
+                            <i class="fas fa-seedling"></i>
+                            <span>Yield Farming Calculator</span>
+                        </div>
+                        <div class="calc-tool-item">
+                            <i class="fas fa-chart-line"></i>
+                            <span>APY/APR Calculator</span>
+                        </div>
+                        <div class="calc-tool-item">
+                            <i class="fas fa-balance-scale"></i>
+                            <span>Position Size Calculator</span>
+                        </div>
+                        <div class="calc-tool-item">
+                            <i class="fas fa-chart-area"></i>
+                            <span>Impermanent Loss Calculator</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Crypto Basics Course -->
             <a href="courses/crypto-basics.html" class="course-card">
                 <i class="fas fa-coins course-icon"></i>

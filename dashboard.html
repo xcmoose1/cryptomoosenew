@@ -64,7 +64,7 @@
         }
 
         .feature-card {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(20, 20, 20, 0.6);
             border-radius: 16px;
             padding: 1.5rem;
             transition: all 0.3s ease;
@@ -74,7 +74,7 @@
 
         .feature-card:hover {
             transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.08);
+            background: rgba(30, 30, 30, 0.8);
             border-color: var(--color-primary);
         }
 
@@ -94,45 +94,15 @@
             color: var(--color-primary);
         }
 
-        .card-content h3 {
+        .card-content h2, .card-content h3 {
             font-size: 1.2rem;
             font-weight: 600;
             margin: 0 0 0.5rem;
             color: var(--color-text);
         }
 
-        .card-content p {
-            font-size: 0.9rem;
-            color: var(--color-text-dim);
-            margin: 0;
-        }
-
-        .card-stats {
-            margin-top: 1rem;
-            display: flex;
-            gap: 1rem;
-        }
-
-        .stat {
-            flex: 1;
-        }
-
-        .stat-value {
-            font-size: 1.2rem;
-            font-weight: 600;
-            color: var(--color-primary);
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: var(--color-text-dim);
-        }
-
         .feature-description {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 0.4rem;
+            margin-bottom: 1rem;
             font-size: 0.9rem;
             color: var(--color-text-dim);
         }
@@ -141,7 +111,7 @@
             display: grid;
             grid-template-columns: 1fr;
             gap: 0.3rem;
-            margin-bottom: 0.3rem;
+            margin-bottom: 1rem;
             list-style: none;
             padding: 0;
         }
@@ -165,44 +135,21 @@
             color: var(--color-text);
         }
 
-        .btn-action {
-            cursor: pointer;
-            position: relative;
-            z-index: 10;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.6rem 1.2rem;
-            background: var(--color-primary);
-            color: white;
-            text-decoration: none;
-            border-radius: 10px;
-            font-weight: 500;
-            transition: all 0.3s ease;
-            border: none;
-            margin-top: 0.8rem;
-        }
-
-        .btn-action:hover {
-            transform: translateY(-2px);
-        }
-
         .feature-button, .btn-action {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 0.5rem;
-            padding: 0.6rem;
-            width: auto;
-            min-width: 120px;
+            padding: 0.6rem 1.2rem;
             background: var(--color-primary);
-            border-radius: 10px;
             color: white;
+            border-radius: 10px;
             text-decoration: none;
             font-weight: 500;
             transition: transform 0.2s ease;
             border: none;
             cursor: pointer;
+            width: 100%;
             margin-top: 0.8rem;
         }
 
@@ -210,20 +157,34 @@
             transform: translateY(-2px);
         }
 
-        .feature-button i {
+        .feature-button i, .btn-action i {
             font-size: 0.9rem;
             transition: transform 0.2s ease;
         }
 
-        .feature-button:hover i {
+        .feature-button:hover i, .btn-action:hover i {
             transform: translateX(5px);
         }
 
-        .button-wrapper {
+        .card-stats {
+            margin-top: 1rem;
             display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-top: 0.8rem;
+            gap: 1rem;
+        }
+
+        .stat {
+            flex: 1;
+        }
+
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--color-text-dim);
         }
 
         .opportunity-links {
@@ -333,6 +294,51 @@
 
         .nav-link.twitter:hover {
             background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Language Selector Styles */
+        .language-selector {
+            position: relative;
+            margin-right: 1rem;
+            z-index: 1000;
+        }
+
+        .language-selector select {
+            appearance: none;
+            background: rgba(0, 255, 157, 0.1);
+            border: 1px solid var(--color-primary);
+            color: var(--color-text);
+            padding: 0.5rem 2.5rem 0.5rem 1rem;
+            border-radius: 8px;
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        .language-selector select:hover {
+            background: rgba(0, 255, 157, 0.2);
+            border-color: var(--color-primary);
+        }
+
+        .language-selector select:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px rgba(0, 255, 157, 0.2);
+        }
+
+        .language-selector::after {
+            content: '\f0d7';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--color-primary);
+            pointer-events: none;
+            font-size: 0.8rem;
         }
 
         /* AI Insights Styles */
@@ -823,6 +829,229 @@
                 padding: 0.8rem;
             }
         }
+
+        /* Market Overview Styles */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .metric-item {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-label {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--color-text-dim);
+            margin-bottom: 0.5rem;
+        }
+
+        .market-levels-section {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .market-levels-group h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--color-text);
+        }
+
+        .market-level {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .chain-volumes-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 0.8rem;
+            margin: 0.8rem 0;
+            font-size: 0.9rem;
+        }
+
+        .chain-volumes-section h3 {
+            font-size: 1rem;
+            margin: 0 0 0.6rem 0;
+            color: var(--color-text-dim);
+        }
+
+        .chain-volumes {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 0.5rem;
+            font-size: 0.85rem;
+        }
+
+        .chain-symbol {
+            font-weight: 500;
+        }
+
+        .volume-change {
+            text-align: right;
+        }
+
+        .volume-change.positive {
+            color: var(--color-primary);
+        }
+
+        .volume-change.negative {
+            color: #ef4444;
+        }
+
+        .volume-share {
+            text-align: right;
+            color: var(--color-text-dim);
+        }
+
+        .insight-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .insight-column h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .insight-column ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .insight-column li {
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            margin: 0.25rem 0;
+        }
+
+        .outlook-section,
+        .events-section {
+            margin: 1.5rem 0;
+        }
+
+        .outlook-section h3,
+        .events-section h3 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .sentiment-section {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--color-border);
+        }
+
+        .sentiment-score {
+            color: var(--color-primary);
+            font-weight: 600;
+            font-size: 1.2rem;
+        }
+
+        .last-update-label {
+            margin-left: auto;
+            color: var(--color-text-dim);
+            font-size: 0.9rem;
+        }
+
+        @media screen and (max-width: 768px) {
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .market-levels-section {
+                grid-template-columns: 1fr;
+            }
+
+            .chain-volume-item {
+                grid-template-columns: 1fr 1fr;
+                gap: 0.5rem;
+            }
+
+            .chain-volume-item > * {
+                text-align: left;
+            }
+
+            .insight-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .outlook-section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .outlook-section h3 {
+            margin: 0 0 0.8rem 0;
+            color: var(--color-text-dim);
+        }
+
+        .outlook-summary {
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: var(--color-text);
+        }
+
+        .outlook-analysis {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .outlook-analysis li {
+            padding: 0.5rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 6px;
+            margin: 0.25rem 0;
+            font-size: 0.9rem;
+            color: var(--color-text-dim);
+        }
+
+        .events-list li {
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            font-size: 0.9rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .events-list li::before {
+            content: "📅";
+            margin-right: 0.5rem;
+        }
+
+        .event-title {
+            font-weight: 500;
+            color: var(--color-text);
+        }
+
+        .event-details {
+            color: var(--color-text-dim);
+            padding-left: 1.5rem;
+        }
     </style>
 </head>
 <body>
@@ -852,6 +1081,15 @@
                 </a>
             </div>
             <div class="nav-right">
+                <div class="language-selector">
+                    <select id="languageSelect" onchange="changeLanguage(this.value)">
+                        <option value="en">English</option>
+                        <option value="ru">Русский</option>
+                        <option value="no">Norsk</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                    </select>
+                </div>
                 <a href="https://t.me/cryptomoose" target="_blank" class="btn-telegram">
                     <i class="fab fa-telegram"></i>
                     <span>Get Live Signals on Telegram</span>
@@ -875,106 +1113,92 @@
         </div>
 
         <!-- Simple Modal -->
-        <div id="dailyUpdateModal">
+        <div id="dailyUpdateModal" class="modal">
             <div class="modal-content">
-                <button class="close-button" id="closeModalBtn">&times;</button>
-                <h2>Daily Update</h2>
-                <div class="insight-controls">
-                    <select id="insightCoin">
-                        <option value="BTC">Bitcoin (BTC)</option>
-                        <option value="ETH">Ethereum (ETH)</option>
-                        <option value="SOL">Solana (SOL)</option>
-                    </select>
-                    <button id="refreshInsight" class="refresh-btn">
-                        <i class="fas fa-sync-alt"></i>
-                    </button>
+                <div class="modal-header">
+                    <h2>Daily Market Update</h2>
+                    <button id="closeModalBtn" class="close-btn">&times;</button>
+                    <button id="refreshInsight" class="refresh-btn">↻</button>
                 </div>
-                
-                <!-- Daily Update Content -->
-                <div class="insight-content">
-                    <div id="loadingUpdate" style="display: none; text-align: center; padding: 20px;">
-                        <p>Updating market analysis...</p>
+                <div id="loadingUpdate" class="loading-container">
+                    Loading...
+                </div>
+                <div id="updateError" class="error-message" style="display: none;">
+                    Failed to fetch market overview
+                </div>
+                <div id="updateContent" class="modal-body">
+                    <!-- Technical Stance -->
+                    <div class="insight-section">
+                        <div class="technical-stance">
+                            <span class="stance-label">Technical Stance:</span>
+                            <span class="stance-value">Loading...</span>
+                        </div>
                     </div>
-                    <div id="updateError" style="display: none; text-align: center; padding: 20px; color: #ef4444;">
-                        <p>Failed to update market analysis. Will try again later.</p>
+
+                    <!-- Market Metrics -->
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Market Cap Change</span>
+                            <span class="market-cap-change">Loading...</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Market Trend</span>
+                            <span class="market-trend">Loading...</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Volume Analysis</span>
+                            <span class="volume-analysis">Loading...</span>
+                        </div>
                     </div>
-                    <div id="updateContent">
-                        <div class="insight-main">
-                            <div class="technical-stance">
-                                <span class="stance-label">Technical Stance:</span>
-                                <span class="stance-value bullish">Moderately Bullish</span>
-                            </div>
-                            <div class="key-metrics">
-                                <div class="metric">
-                                    <span>RSI</span>
-                                    <span class="value" data-metric="rsi">62</span>
-                                </div>
-                                <div class="metric">
-                                    <span>MACD</span>
-                                    <span class="value" data-metric="macd">Bullish Cross</span>
-                                </div>
-                                <div class="metric">
-                                    <span>Volume</span>
-                                    <span class="value" data-metric="volume">Above Avg</span>
-                                </div>
-                            </div>
-                            <div class="price-levels">
-                                <div class="resistance">
-                                    <h4>Resistance</h4>
-                                    <ul>
-                                        <li>$45,500</li>
-                                        <li>$46,800</li>
-                                        <li>$48,000</li>
-                                    </ul>
-                                </div>
-                                <div class="support">
-                                    <h4>Support</h4>
-                                    <ul>
-                                        <li>$43,200</li>
-                                        <li>$42,500</li>
-                                        <li>$41,800</li>
-                                    </ul>
-                                </div>
-                            </div>
+
+                    <!-- Key Market Levels -->
+                    <div class="market-levels-section">
+                        <div class="market-levels-group">
+                            <h3>Total Market Cap</h3>
+                            <div class="market-cap-levels"></div>
                         </div>
-                        <div class="insight-details">
-                            <div class="catalysts">
-                                <h4>Key Catalysts</h4>
-                                <ul>
-                                    <li>Spot ETF volume reaching new highs ($2.8B daily)</li>
-                                    <li>Mining difficulty increased 3.2% post-halving</li>
-                                    <li>Institutional inflows continue through Q1 2025</li>
-                                </ul>
-                            </div>
-                            <div class="risks">
-                                <h4>Risk Factors</h4>
-                                <ul>
-                                    <li>US bond yields rising (10Y at 4.8%)</li>
-                                    <li>Options market showing increased put volume at $80K</li>
-                                    <li>Short-term profit-taking possible at $85K resistance</li>
-                                </ul>
-                            </div>
-                            <div class="outlook">
-                                <h4>7-Day Outlook</h4>
-                                <p>High probability of testing $85K resistance given strong institutional buying and positive derivatives data. Watch for potential consolidation around $82-83K before next leg up. Risk/reward favors longs with tight stops below $80K.</p>
-                            </div>
-                            <div class="events">
-                                <h4>Key Events</h4>
-                                <ul>
-                                    <li>Fed minutes release (Jan 8)</li>
-                                    <li>Q4 earnings from major crypto companies</li>
-                                    <li>European crypto regulation vote (Jan 12)</li>
-                                </ul>
-                            </div>
+                        <div class="market-levels-group">
+                            <h3>BTC Dominance</h3>
+                            <div class="dominance-levels"></div>
                         </div>
-                        <div class="insight-footer">
-                            <div class="sentiment-score">
-                                Sentiment Score: <span class="score positive">7.5</span>/10
-                            </div>
-                            <div class="last-updated">
-                                Updated: just now
-                            </div>
+                    </div>
+
+                    <!-- Chain Volumes -->
+                    <div class="chain-volumes-section">
+                        <h3>Chain Volumes (24h)</h3>
+                        <div class="chain-volumes"></div>
+                    </div>
+
+                    <!-- Key Catalysts and Risks -->
+                    <div class="insight-grid">
+                        <div class="insight-column">
+                            <h3>Key Catalysts</h3>
+                            <ul class="catalysts-list"></ul>
                         </div>
+                        <div class="insight-column">
+                            <h3>Key Risks</h3>
+                            <ul class="risks-list"></ul>
+                        </div>
+                    </div>
+
+                    <!-- Market Outlook -->
+                    <div class="outlook-section">
+                        <h3>Market Outlook</h3>
+                        <p class="outlook-summary"></p>
+                        <ul class="outlook-analysis"></ul>
+                    </div>
+
+                    <!-- Upcoming Events -->
+                    <div class="events-section">
+                        <h3>Upcoming Events</h3>
+                        <ul class="events-list"></ul>
+                    </div>
+
+                    <!-- Sentiment Score -->
+                    <div class="sentiment-section">
+                        <span class="sentiment-label">Sentiment Score:</span>
+                        <span class="sentiment-score">0</span>/10
+                        <span class="last-update-label">Updated: <span class="last-update"></span></span>
                     </div>
                 </div>
             </div>
@@ -983,49 +1207,62 @@
         <!-- Feature Grid -->
         <div class="feature-grid">
             <!-- Signals Card -->
-            <div class="feature-card signals" onclick="window.location.href='signals.html'">
+            <div class="feature-card premium-signals">
                 <div class="card-icon">
                     <i class="fas fa-chart-line"></i>
                 </div>
                 <div class="card-content">
-                    <h2>Premium Signals</h2>
-                    <div class="feature-description">
-                        <p>Advanced trading signals powered by multi-indicator strategy</p>
-                        <ul>
-                            <li>Real-time EMA, RSI & Volume analysis</li>
-                            <li>15+ major cryptocurrency pairs</li>
-                            <li>Telegram notifications</li>
-                        </ul>
-                    </div>
+                    <h3>Signaler</h3>
+                    <p>Avanserte handelssignaler drevet av multiindikatorstrategi</p>
+                    <ul class="feature-list">
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Real-time EMA, RSI & Volume analysis</span>
+                        </li>
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>15+ major cryptocurrency pairs</span>
+                        </li>
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Telegram notifications</span>
+                        </li>
+                    </ul>
                     <div class="button-wrapper">
-                        <button class="feature-button">
-                            <span>View Signals</span>
+                        <a href="signals.html" class="btn-action">
+                            <span>Se signaler</span>
                             <i class="fas fa-arrow-right"></i>
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
             <!-- Original cards follow -->
-            <div class="feature-card gem-hunter" onclick="window.location.href='gem-hunter.html'">
-
+            <div class="feature-card gem-hunter">
                 <div class="card-icon">
                     <i class="fas fa-gem"></i>
                 </div>
                 <div class="card-content">
-                    <h2>AI Gem Hunter</h2>
-                    <div class="feature-description">
-                        <p>Discover promising low-cap crypto projects with advanced AI analysis</p>
-                        <ul>
-                            <li>AI-powered project scoring</li>
-                            <li>Risk assessment & analysis</li>
-                            <li>Real-time sentiment tracking</li>
-                        </ul>
-                    </div>
+                    <h3>AI Gemmejeger</h3>
+                    <p>Oppdag lovende kryptoprosjekter med lav markedsverdi ved hjelp av avansert AI-analyse</p>
+                    <ul class="feature-list">
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>AI-powered project scoring</span>
+                        </li>
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Risk assessment & analysis</span>
+                        </li>
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Real-time sentiment tracking</span>
+                        </li>
+                    </ul>
                     <div class="button-wrapper">
-                        <button class="feature-button">
-                            <span>Find Gems</span>
+                        <a href="gem-hunter.html" class="btn-action">
+                            <span>Åpne Gemmejeger</span>
                             <i class="fas fa-arrow-right"></i>
-                        </button>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -1035,7 +1272,7 @@
                     <i class="fas fa-newspaper"></i>
                 </div>
                 <div class="card-content">
-                    <h3>Daily Digest</h3>
+                    <h3>Daglig markedsoppdatering</h3>
                     <p>Stay informed with our daily market analysis and insights</p>
                     <ul class="feature-list">
                         <li class="feature-item">
@@ -1103,31 +1340,29 @@
                     <i class="fas fa-graduation-cap"></i>
                 </div>
                 <div class="card-content">
-                    <h2>Learning Hub</h2>
-                    <div class="feature-description">
-                        <p>Master cryptocurrency trading with our comprehensive educational resources.</p>
-                        <div class="feature-list">
-                            <div class="feature-item">
-                                <i class="fas fa-book"></i>
-                                <span>Trading Fundamentals & Strategy</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-chart-bar"></i>
-                                <span>Technical Analysis Mastery</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-balance-scale"></i>
-                                <span>Risk Management & Psychology</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-layer-group"></i>
-                                <span>Advanced Trading Techniques</span>
-                            </div>
-                        </div>
-                    </div>
+                    <h3 class="learning-title"></h3>
+                    <p class="learning-desc"></p>
+                    <ul class="feature-list">
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span class="learning-feature-1"></span>
+                        </li>
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span class="learning-feature-2"></span>
+                        </li>
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span class="learning-feature-3"></span>
+                        </li>
+                        <li class="feature-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span class="learning-feature-4"></span>
+                        </li>
+                    </ul>
                     <div class="button-wrapper">
                         <a href="learning.html" class="btn-action">
-                            <span>Start Learning</span>
+                            <span class="learning-button"></span>
                             <i class="fas fa-arrow-right"></i>
                         </a>
                     </div>
@@ -1162,42 +1397,8 @@
                         </div>
                     </div>
                     <div class="button-wrapper">
-                        <a href="ai-insights.html" class="btn-action">
+                        <a href="members.html" class="btn-action">
                             <span>View AI Insights</span>
-                            <i class="fas fa-arrow-right"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="feature-card crypto-calc">
-                <div class="card-icon">
-                    <i class="fas fa-calculator"></i>
-                </div>
-                <div class="card-content">
-                    <h3>CryptoCalc Hub</h3>
-                    <p>Access our comprehensive suite of cryptocurrency calculators and tools</p>
-                    <ul class="feature-list">
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle"></i>
-                            <span>Yield Farming Calculator</span>
-                        </li>
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle"></i>
-                            <span>APY/APR Calculator</span>
-                        </li>
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle"></i>
-                            <span>Position Size Calculator</span>
-                        </li>
-                        <li class="feature-item">
-                            <i class="fas fa-check-circle"></i>
-                            <span>Impermanent Loss Calculator</span>
-                        </li>
-                    </ul>
-                    <div class="button-wrapper">
-                        <a href="crypto-calc.html" class="btn-action">
-                            <span>Open Calculator Hub</span>
                             <i class="fas fa-arrow-right"></i>
                         </a>
                     </div>
@@ -1244,7 +1445,182 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/translations.js"></script>
+    <script type="module" src="js/components/market-overview.js"></script>
     <script>
+        // Language handling functions
+        function changeLanguage(lang) {
+            document.documentElement.lang = lang;
+            localStorage.setItem('preferredLanguage', lang);
+            updateContent(lang);
+        }
+
+        function updateContent(lang) {
+            const t = translations[lang];
+            
+            // Update welcome section
+            document.querySelector('.welcome-section h1').textContent = t.welcome;
+            document.querySelector('.welcome-section p').textContent = t.welcomeSubtitle;
+            document.querySelector('.daily-update-button').innerHTML = `
+                <i class="fas fa-newspaper"></i>
+                ${t.dailyUpdate}
+            `;
+
+            // Update navigation items
+            document.querySelector('.nav-link[href="dashboard.html"] span').textContent = t.dashboard;
+            document.querySelector('.nav-link[href="signals.html"] span').textContent = t.signals;
+            document.querySelector('.nav-link[href="segment-projections.html"] span').textContent = t.marketSegments;
+            document.querySelector('.nav-link[href="members.html"] span').textContent = t.aiInsights;
+            
+            // Update Telegram and Twitter buttons
+            document.querySelector('.btn-telegram span').textContent = t.joinTelegram;
+            document.querySelector('.nav-link.twitter span').textContent = t.followAlpha;
+
+            // Update all feature cards
+            const cards = {
+                'premium-signals': {
+                    title: t.signals,
+                    description: t.signalsDesc,
+                    features: [t.realTimeSignals, t.multiIndicator, t.telegramNotifications],
+                    button: t.viewSignals
+                },
+                'gem-hunter': {
+                    title: t.gemHunter,
+                    description: t.gemHunterDesc,
+                    features: [t.aiProjectScanning, t.riskAssessment, t.sentimentTracking],
+                    button: t.viewGemHunter
+                },
+                'segment-projections': {
+                    title: t.marketSegments,
+                    description: t.segmentsDesc,
+                    features: [t.defiAnalysis, t.nftTrends, t.layer1Performance, t.growthMetrics],
+                    button: t.viewSegmentProjections
+                },
+                'ai-insights': {
+                    title: t.aiInsights,
+                    description: t.aiDesc,
+                    features: [t.patternRecognition, t.trendPrediction, t.marketAnalysis],
+                    button: t.viewAiInsights
+                },
+                'daily-digest': {
+                    title: t.dailyUpdate,
+                    description: "Stay informed with our daily market analysis and insights",
+                    features: ["Market Sentiment Analysis", "Key Price Levels", "Trading Opportunities", "Risk Assessment"],
+                    button: "View Today's Update"
+                },
+                'learning': {
+                    title: t.learningTitle,
+                    description: t.learningDesc,
+                    features: [t.tradingFundamentals, t.technicalAnalysis, t.riskManagement, t.advancedTrading],
+                    button: t.startLearning
+                },
+                'opportunities': {
+                    title: "Opportunities",
+                    description: "Discover high-potential opportunities across the crypto market",
+                    features: ["Breakout Alerts", "DeFi Yields", "NFT Opportunities", "Token Sales"],
+                    button: "View Opportunities"
+                }
+            };
+
+            // Update each card
+            Object.keys(cards).forEach(cardClass => {
+                const card = document.querySelector(`.feature-card.${cardClass}`);
+                if (card) {
+                    const cardData = cards[cardClass];
+                    
+                    // Update title
+                    const titleEl = card.querySelector('h2, h3');
+                    if (titleEl) titleEl.textContent = cardData.title;
+                    
+                    // Update description
+                    const descEl = card.querySelector('.card-content p');
+                    if (descEl) descEl.textContent = cardData.description;
+                    
+                    // Update features
+                    const featureItems = card.querySelectorAll('.feature-item span');
+                    if (featureItems.length > 0 && cardData.features) {
+                        cardData.features.forEach((feature, index) => {
+                            if (featureItems[index]) {
+                                featureItems[index].textContent = feature;
+                            }
+                        });
+                    }
+                    
+                    // Update button
+                    const buttonEl = card.querySelector('.btn-action span');
+                    if (buttonEl && cardData.button) {
+                        buttonEl.textContent = cardData.button;
+                    }
+                }
+            });
+
+            // Special handling for Learning Hub translations
+            const learningCard = document.querySelector('.feature-card.learning');
+            if (learningCard) {
+                learningCard.querySelector('.learning-title').textContent = t.learningHub;
+                learningCard.querySelector('.learning-desc').textContent = t.learningHubDesc;
+                learningCard.querySelector('.learning-feature-1').textContent = t.tradingFundamentals;
+                learningCard.querySelector('.learning-feature-2').textContent = t.technicalAnalysis;
+                learningCard.querySelector('.learning-feature-3').textContent = t.riskManagement;
+                learningCard.querySelector('.learning-feature-4').textContent = t.advancedTrading;
+                learningCard.querySelector('.learning-button').textContent = t.startLearning;
+            }
+            
+            // Update modal content
+            const modal = document.getElementById('dailyUpdateModal');
+            if (modal) {
+                modal.querySelector('h2').textContent = t.dailyUpdate;
+                modal.querySelector('#loadingUpdate p').textContent = t.updateMarketAnalysis;
+                modal.querySelector('#updateError p').textContent = t.updateError;
+                
+                // Update modal specific elements
+                const technicalStance = modal.querySelector('.stance-label');
+                if (technicalStance) technicalStance.textContent = t.technicalStance;
+                
+                const metrics = modal.querySelectorAll('.key-metrics .metric span:first-child');
+                if (metrics.length >= 3) {
+                    metrics[0].textContent = t.rsi;
+                    metrics[1].textContent = t.macd;
+                    metrics[2].textContent = t.volume;
+                }
+                
+                const priceLabels = modal.querySelectorAll('.price-levels h4');
+                if (priceLabels.length >= 2) {
+                    priceLabels[0].textContent = t.resistance;
+                    priceLabels[1].textContent = t.support;
+                }
+                
+                const catalysts = modal.querySelector('.catalysts h4');
+                if (catalysts) catalysts.textContent = t.keyCatalysts;
+                
+                const risks = modal.querySelector('.risks h4');
+                if (risks) risks.textContent = t.keyRisks;
+                
+                const outlook = modal.querySelector('.outlook h4');
+                if (outlook) outlook.textContent = t.outlook;
+                
+                const events = modal.querySelector('.events h4');
+                if (events) events.textContent = t.upcomingEvents;
+            }
+
+            // Update all buttons
+            document.querySelectorAll('.btn-action span').forEach(btn => {
+                const cardType = btn.closest('.feature-card').classList[1];
+                const buttonKey = `view${cardType.split('-').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1)).join('')}`;
+                if (t[buttonKey]) {
+                    btn.textContent = t[buttonKey];
+                }
+            });
+        }
+        
+        // Initialize language on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedLang = localStorage.getItem('preferredLanguage') || 'en';
+            document.getElementById('languageSelect').value = savedLang;
+            changeLanguage(savedLang);
+        });
+
         document.addEventListener('DOMContentLoaded', function() {
             var modal = document.getElementById('dailyUpdateModal');
             var btn = document.getElementById('openModalBtn');
@@ -1357,12 +1733,26 @@
                     .map(risk => `<li>${risk}</li>`).join('');
 
                 // Update outlook
-                document.querySelector('.outlook p').textContent = data.outlook;
+                if (data.market_outlook && data.market_outlook.summary && data.market_outlook.analysis) {
+                    document.querySelector('.outlook-summary').textContent = data.market_outlook.summary;
+                    const outlookList = document.querySelector('.outlook-analysis');
+                    outlookList.innerHTML = data.market_outlook.analysis
+                        .map(point => `<li>${point}</li>`).join('');
+                } else {
+                    console.error('Invalid market outlook data:', data.market_outlook);
+                }
 
                 // Update events
-                const eventsList = document.querySelector('.events ul');
-                eventsList.innerHTML = data.events
-                    .map(event => `<li>${event}</li>`).join('');
+                const eventsList = document.querySelector('.events-list');
+                eventsList.innerHTML = data.upcoming_events
+                    .map(event => {
+                        const [title, details] = event.split(': ');
+                        return `<li>
+                            <span class="event-title">${title}</span>
+                            <span class="event-details">${details}</span>
+                        </li>`;
+                    })
+                    .join('');
 
                 // Update sentiment score
                 const scoreElement = document.querySelector('.sentiment-score .score');

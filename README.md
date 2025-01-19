@@ -58,6 +58,63 @@ CryptoMoose is a comprehensive cryptocurrency market analysis platform that prov
 - Real-time signal notifications via Telegram
 - Signal history and performance tracking
 
+### 6. Social Media Strategy
+- Thoughtful market analysis and insights
+- Integration with Buffer for scheduled posting
+- Focus on macro trends and policy impacts
+- Community engagement and thought leadership
+
+#### Content Philosophy
+Our social media presence aims to provide deep, thoughtful analysis that connects market movements with broader context:
+- Political and policy implications
+- Historical pattern analysis
+- Institutional money flows
+- Global macro trends
+
+#### Content Types
+1. **Market Analysis with Context**
+   - Connect price action with global events
+   - Highlight institutional movements
+   - Provide actionable insights
+
+2. **Policy Impact Analysis**
+   - Political developments affecting crypto
+   - Regulatory landscape changes
+   - Global policy shifts
+
+3. **Historical Pattern Analysis**
+   - Market cycle comparisons
+   - Behavioral analysis
+   - Pattern recognition
+
+#### Writing Style Guide
+- Conversational yet professional tone
+- Focus on narrative and context
+- Connect technical analysis with real-world events
+- Encourage discussion and engagement
+- Avoid hyperbole and excessive emojis
+- Maintain credibility while being accessible
+
+#### Posting Schedule
+- Strategic content: 4-6 times daily
+- Market updates: Based on significant movements
+- Weekly deep dives: Policy and trend analysis
+- Monthly market outlook: Comprehensive analysis
+
+### 7. Market Overview
+The Market Overview feature provides a comprehensive daily analysis of the cryptocurrency market using AI-powered insights and real-time data from CoinGecko. It includes:
+
+- Total market capitalization and 24h changes
+- BTC dominance analysis
+- Chain-specific volume analysis
+- Technical stance and market trends
+- Key support/resistance levels
+- Market catalysts and risks
+- Upcoming events
+- Market sentiment score
+
+The overview is automatically updated every 5 minutes to ensure fresh data, while using intelligent caching to prevent API rate limits.
+
 ## Technology Stack
 
 ### Frontend
@@ -85,6 +142,8 @@ CryptoMoose is a comprehensive cryptocurrency market analysis platform that prov
 - CryptoRank API
 - Finnhub API
 - AlphaVantage API
+- Buffer API for social media automation
+- CoinGecko API for market data
 
 ## Setup and Installation
 
@@ -198,6 +257,35 @@ wss.on('connection', (ws) => {
 });
 ```
 
+### Market Overview Issues
+
+#### 1. "Failed to parse market analysis response" Error
+This error occurs when there's an issue with the OpenAI API response. To fix:
+- Check that your OpenAI API key is valid and properly set in `.env`
+- Ensure you have sufficient API credits
+- Try refreshing the page and clicking the update button again
+- Check the browser console and server logs for specific error details
+
+If the error persists:
+1. Stop the server
+2. Clear the browser cache
+3. Delete the `.env` file and recreate it with your API key
+4. Restart the server with `node server/server.js`
+
+#### 2. Loading State Stuck
+If the market overview stays in "Loading..." state:
+- Check that the server is running
+- Verify your internet connection
+- Check the browser console for errors
+- Try closing and reopening the modal
+
+#### 3. Missing or Incorrect Data
+If you see incomplete or incorrect market data:
+- Ensure CoinGecko API is accessible (sometimes it has rate limits)
+- Check that all required environment variables are set
+- Try clearing your browser cache
+- Restart the server
+
 ### General Debugging Tips
 1. Check server logs for errors
 2. Verify all required dependencies are installed
@@ -236,3 +324,4 @@ For support, please join our community:
 - CryptoRank for market data
 - Finnhub for market data
 - AlphaVantage for market data
+- CoinGecko for market data

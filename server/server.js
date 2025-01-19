@@ -46,9 +46,10 @@ import { getAllRegulatoryData, getHighRiskAlerts } from '../api/regulatory-track
 import authRoutes from '../routes/auth.js';
 import userRoutes from '../routes/user.js';
 import aiRoutes from '../routes/ai-insights.js';
-import dailyUpdateRouter from '../routes/daily-update.js';
 import { HTXDailyService } from '../services/htx-daily.service.js';
 import signalsRouter from '../signals/routes/signals-routes.js';
+import contentRouter from './routes/content-routes.js';
+import marketOverviewRouter from '../routes/market-overview.js';
 
 // Rate Limiter implementation
 class RateLimiter {
@@ -142,11 +143,12 @@ app.use('/api/gem-hunter', gemHunterRouter);
 app.use('/api/social-metrics', socialMetricsRouter);
 app.use('/api/market-intelligence', marketIntelligenceRouter);
 app.use('/api/indicators', indicatorsRouter);
-app.use('/api/signals', signalsRouter);
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/ai', aiRoutes);
-app.use('/api/daily-update', dailyUpdateRouter);
+app.use('/api/signals', signalsRouter);
+app.use('/api/content', contentRouter);
+app.use('/api/market-overview', marketOverviewRouter);
 
 // Create a separate instance for daily updates
 const htxDailyService = new HTXDailyService();
