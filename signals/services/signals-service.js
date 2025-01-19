@@ -9,7 +9,13 @@ export class SignalsService {
         this.ws = null;
         this.candleHistory = new Map();
         this.indicators = new Map();
-        this.lastSignals = new Map();
+        this.signals = {
+            active: new Map(),    // Active signals being monitored
+            completed: new Map(), // Completed signals (targets hit or stop loss)
+            all: new Map(),       // All signals history
+            buy: new Map(),       // Buy signals
+            sell: new Map()       // Sell signals
+        };
         this.telegramService = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
@@ -25,6 +31,9 @@ export class SignalsService {
         this.wss.on('connection', (ws) => {
             console.log('New client connected to signals WebSocket');
             this.clients.add(ws);
+            
+            // Send current signals state to new client
+            this.sendSignalsState(ws);
             
             ws.on('close', () => {
                 console.log('Client disconnected from signals WebSocket');
@@ -141,7 +150,7 @@ export class SignalsService {
         console.log(`\n🎯 Active Trading Pairs:`);
         activeSymbols.forEach(symbol => {
             const indicators = this.indicators.get(symbol);
-            const lastSignal = this.lastSignals.get(symbol);
+            const lastSignal = this.signals.active.get(symbol);
             console.log(`   ${symbol}: ${lastSignal ? `Last signal: ${lastSignal.type} @ ${new Date(lastSignal.time).toISOString()}` : 'No signals yet'}`);
         });
         console.log('\n=== End Status Update ===\n');
@@ -340,7 +349,6 @@ export class SignalsService {
     async processSignals(symbol) {
         try {
             if (!this.isIndicatorReady(symbol)) {
-                console.log(`Waiting for previous EMA values for ${symbol}`);
                 return;
             }
 
@@ -359,6 +367,8 @@ export class SignalsService {
             const history = this.candleHistory.get(symbol);
             const closes = history.map(c => c.close);
             const volumes = history.map(c => c.volume);
+            const currentClose = closes[closes.length - 1];
+            const currentVolume = volumes[volumes.length - 1];
 
             // Calculate indicators
             indicators.rsi.nextValue(closes[closes.length - 1]);
@@ -370,19 +380,20 @@ export class SignalsService {
             const prevEmaFast = indicators.emaFast.result[indicators.emaFast.result.length - 2];
             const prevEmaSlow = indicators.emaSlow.result[indicators.emaSlow.result.length - 2];
             
-            // Skip if we don't have previous values yet
             if (!prevEmaFast || !prevEmaSlow) {
-                console.log(`Waiting for previous EMA values for ${symbol}`);
                 return;
             }
-            
-            // Current values
-            const currentClose = closes[closes.length - 1];
-            const currentVolume = volumes[volumes.length - 1];
             
             // Calculate volume ratio
             const volumeRatio = currentVolume / volumeMA;
             
+            // Check active signals first
+            const activeSignal = this.signals.active.get(symbol);
+            if (activeSignal) {
+                this.checkActiveSignal(symbol, currentClose, activeSignal);
+                return; // Don't generate new signals while one is active
+            }
+
             let signal = null;
             
             // BUY Signal Conditions
@@ -392,15 +403,27 @@ export class SignalsService {
                 rsi < 70 && // Not overbought
                 volumeRatio > 1.5 // Volume confirmation
             ) {
+                const stopLoss = currentClose * 0.97; // 3% stop loss
+                const targets = [
+                    currentClose * 1.015, // Target 1: 1.5%
+                    currentClose * 1.03,  // Target 2: 3%
+                    currentClose * 1.05   // Target 3: 5%
+                ];
+                
                 signal = {
                     type: 'BUY',
                     symbol,
-                    price: currentClose,
+                    entryPrice: currentClose,
+                    currentPrice: currentClose,
+                    stopLoss,
+                    targets,
+                    hitTargets: [false, false, false],
                     rsi,
                     emaFast,
                     emaSlow,
                     volumeRatio: volumeRatio.toFixed(2),
-                    time: new Date().toISOString()
+                    time: Date.now(),
+                    status: 'ACTIVE'
                 };
             }
             // SELL Signal Conditions
@@ -410,39 +433,133 @@ export class SignalsService {
                 rsi > 30 && // Not oversold
                 volumeRatio > 1.5 // Volume confirmation
             ) {
+                const stopLoss = currentClose * 1.03; // 3% stop loss for shorts
+                const targets = [
+                    currentClose * 0.985, // Target 1: 1.5%
+                    currentClose * 0.97,  // Target 2: 3%
+                    currentClose * 0.95   // Target 3: 5%
+                ];
+                
                 signal = {
                     type: 'SELL',
                     symbol,
-                    price: currentClose,
+                    entryPrice: currentClose,
+                    currentPrice: currentClose,
+                    stopLoss,
+                    targets,
+                    hitTargets: [false, false, false],
                     rsi,
                     emaFast,
                     emaSlow,
                     volumeRatio: volumeRatio.toFixed(2),
-                    time: new Date().toISOString()
+                    time: Date.now(),
+                    status: 'ACTIVE'
                 };
             }
 
             if (signal) {
-                const lastSignal = this.lastSignals.get(symbol);
-                // Check 1-hour cooldown and maximum concurrent trades
-                if (!lastSignal || Date.now() - lastSignal.time > 3600000) {
-                    this.lastSignals.set(symbol, { 
-                        type: signal.type, 
-                        time: Date.now(),
-                        price: currentClose
-                    });
-                    await this.sendSignal(signal);
-                }
+                await this.sendSignal(signal);
             }
         } catch (error) {
             console.error('Error processing signals:', error);
         }
     }
 
+    checkActiveSignal(symbol, currentPrice, signal) {
+        signal.currentPrice = currentPrice;
+        let shouldComplete = false;
+        let reason = '';
+
+        // Check stop loss
+        if (signal.type === 'BUY' && currentPrice <= signal.stopLoss) {
+            shouldComplete = true;
+            reason = 'Stop loss hit';
+        } else if (signal.type === 'SELL' && currentPrice >= signal.stopLoss) {
+            shouldComplete = true;
+            reason = 'Stop loss hit';
+        }
+
+        // Check targets
+        if (!shouldComplete) {
+            signal.targets.forEach((target, index) => {
+                if (!signal.hitTargets[index]) {
+                    if (signal.type === 'BUY' && currentPrice >= target) {
+                        signal.hitTargets[index] = true;
+                        this.notifyTargetHit(signal, index + 1);
+                    } else if (signal.type === 'SELL' && currentPrice <= target) {
+                        signal.hitTargets[index] = true;
+                        this.notifyTargetHit(signal, index + 1);
+                    }
+                }
+            });
+
+            // Check if all targets are hit
+            if (signal.hitTargets.every(hit => hit)) {
+                shouldComplete = true;
+                reason = 'All targets hit';
+            }
+        }
+
+        // Complete the signal if needed
+        if (shouldComplete) {
+            signal.status = 'COMPLETED';
+            signal.completionReason = reason;
+            signal.completionTime = Date.now();
+            
+            // Move signal to completed
+            this.signals.completed.set(`${symbol}-${signal.time}`, signal);
+            this.signals.active.delete(symbol);
+            
+            // Notify completion
+            this.notifySignalCompletion(signal);
+        }
+
+        // Broadcast updated signal state
+        this.broadcastSignalUpdate(signal);
+    }
+
+    notifyTargetHit(signal, targetNumber) {
+        const message = `🎯 Target ${targetNumber} Hit!\n` +
+                       `${signal.type} ${signal.symbol}\n` +
+                       `Entry: ${signal.entryPrice}\n` +
+                       `Target: ${signal.targets[targetNumber - 1]}\n` +
+                       `Current Price: ${signal.currentPrice}`;
+        
+        this.telegramService.sendMessage(message);
+    }
+
+    notifySignalCompletion(signal) {
+        const profit = signal.type === 'BUY' 
+            ? ((signal.currentPrice - signal.entryPrice) / signal.entryPrice * 100)
+            : ((signal.entryPrice - signal.currentPrice) / signal.entryPrice * 100);
+
+        const message = `✅ Signal Completed!\n` +
+                       `${signal.type} ${signal.symbol}\n` +
+                       `Reason: ${signal.completionReason}\n` +
+                       `Entry: ${signal.entryPrice}\n` +
+                       `Exit: ${signal.currentPrice}\n` +
+                       `Profit: ${profit.toFixed(2)}%`;
+        
+        this.telegramService.sendMessage(message);
+    }
+
+    broadcastSignalUpdate(signal) {
+        const wsMessage = JSON.stringify({
+            type: 'signalUpdate',
+            data: signal
+        });
+        
+        this.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(wsMessage);
+            }
+        });
+    }
+
     async sendSignal(signal) {
         if (!signal) return;
 
-        const lastSignal = this.lastSignals.get(signal.symbol);
+        const lastSignal = this.signals.active.get(signal.symbol);
         const now = Date.now();
         
         // Check cooldown period
@@ -451,12 +568,18 @@ export class SignalsService {
         }
 
         // Store the signal
-        this.lastSignals.set(signal.symbol, signal);
+        this.signals.all.set(signal.symbol, signal);
+        this.signals.active.set(signal.symbol, signal);
+        if (signal.type === 'BUY') {
+            this.signals.buy.set(signal.symbol, signal);
+        } else if (signal.type === 'SELL') {
+            this.signals.sell.set(signal.symbol, signal);
+        }
 
         // Format message for Telegram
         const message = `🚨 *${signal.type} Signal*\n` +
                       `🔸 *Pair:* ${signal.symbol}\n` +
-                      `🔹 *Price:* ${signal.price}\n` +
+                      `🔹 *Price:* ${signal.entryPrice}\n` +
                       `📊 *RSI:* ${signal.rsi.toFixed(2)}\n` +
                       `📈 *Volume Ratio:* ${signal.volumeRatio}x\n` +
                       `⏰ *Time:* ${new Date().toLocaleString()}`;
@@ -477,6 +600,19 @@ export class SignalsService {
         });
 
         console.log(`${signal.type} signal sent for ${signal.symbol}`);
+    }
+
+    sendSignalsState(ws) {
+        const signalsState = {
+            type: 'signalsState',
+            data: {
+                active: Array.from(this.signals.active.values()),
+                completed: Array.from(this.signals.completed.values()),
+                buy: Array.from(this.signals.buy.values()),
+                sell: Array.from(this.signals.sell.values())
+            }
+        };
+        ws.send(JSON.stringify(signalsState));
     }
 }
 
