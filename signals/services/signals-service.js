@@ -217,8 +217,44 @@ export class SignalsService {
                ind.volumeMA.length >= SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD;
     }
 
+    async updateCandleHistory(symbol, candle) {
+        try {
+            if (!this.candleHistory.has(symbol)) {
+                this.candleHistory.set(symbol, []);
+            }
+
+            const history = this.candleHistory.get(symbol);
+            
+            // Add new candle
+            history.push(candle);
+
+            // Keep only the most recent candles
+            const maxCandles = Math.max(
+                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 3,
+                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 3,
+                SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 3
+            );
+
+            if (history.length > maxCandles) {
+                this.candleHistory.set(symbol, history.slice(-maxCandles));
+            }
+
+            return true;
+        } catch (error) {
+            console.error(`Error updating candle history for ${symbol}:`, error);
+            return false;
+        }
+    }
+
     async processCandle(symbol, candle) {
         try {
+            // First update candle history
+            const historyUpdated = await this.updateCandleHistory(symbol, candle);
+            if (!historyUpdated) {
+                console.error(`Failed to update candle history for ${symbol}`);
+                return;
+            }
+
             if (!this.indicators.has(symbol)) {
                 const initialized = await this.initializeIndicators(symbol);
                 if (!initialized) {
@@ -236,35 +272,49 @@ export class SignalsService {
             }
 
             const ind = this.indicators.get(symbol);
-            const close = parseFloat(candle.close);
-            const volume = parseFloat(candle.volume);
+            const history = this.candleHistory.get(symbol);
+            
+            // Get the last n+1 closes for EMA calculation
+            const closes = history.slice(-Math.max(
+                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD
+            ) - 1).map(c => parseFloat(c.close));
+            
+            // Add current candle
+            closes.push(parseFloat(candle.close));
 
             // Update EMAs
             const fastAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD + 1);
             const slowAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD + 1);
 
-            const newFastEMA = (close - ind.emaFast[ind.emaFast.length - 1]) * fastAlpha + ind.emaFast[ind.emaFast.length - 1];
-            const newSlowEMA = (close - ind.emaSlow[ind.emaSlow.length - 1]) * slowAlpha + ind.emaSlow[ind.emaSlow.length - 1];
+            if (ind.emaFast.length > 0) {
+                const prevFastEMA = ind.emaFast[ind.emaFast.length - 1];
+                const newFastEMA = (parseFloat(candle.close) - prevFastEMA) * fastAlpha + prevFastEMA;
+                ind.emaFast.push(newFastEMA);
+            }
 
-            ind.emaFast.push(newFastEMA);
-            ind.emaSlow.push(newSlowEMA);
+            if (ind.emaSlow.length > 0) {
+                const prevSlowEMA = ind.emaSlow[ind.emaSlow.length - 1];
+                const newSlowEMA = (parseFloat(candle.close) - prevSlowEMA) * slowAlpha + prevSlowEMA;
+                ind.emaSlow.push(newSlowEMA);
+            }
 
-            // Update RSI and Volume MA
-            const closes = [...this.candleHistory.get(symbol).map(c => parseFloat(c.close)), close];
-            const volumes = [...this.candleHistory.get(symbol).map(c => parseFloat(c.volume)), volume];
-
-            const newRSI = RSI.calculate({
+            // Update RSI using the full history needed for calculation
+            const rsiValues = RSI.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
                 values: closes
             });
+            ind.rsi = rsiValues;
 
-            const newVolumeMA = SMA.calculate({
+            // Update Volume MA
+            const volumes = history.slice(-SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD).map(c => parseFloat(c.volume));
+            volumes.push(parseFloat(candle.volume));
+            
+            const volumeMAValues = SMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
                 values: volumes
             });
-
-            ind.rsi = newRSI;
-            ind.volumeMA = newVolumeMA;
+            ind.volumeMA = volumeMAValues;
 
             // Keep arrays at a reasonable size
             const maxSize = Math.max(
@@ -273,10 +323,10 @@ export class SignalsService {
                 SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
             );
 
-            if (ind.emaFast.length > maxSize) ind.emaFast = ind.emaFast.slice(-maxSize);
-            if (ind.emaSlow.length > maxSize) ind.emaSlow = ind.emaSlow.slice(-maxSize);
-            if (ind.rsi.length > maxSize) ind.rsi = ind.rsi.slice(-maxSize);
-            if (ind.volumeMA.length > maxSize) ind.volumeMA = ind.volumeMA.slice(-maxSize);
+            ind.emaFast = ind.emaFast.slice(-maxSize);
+            ind.emaSlow = ind.emaSlow.slice(-maxSize);
+            ind.rsi = ind.rsi.slice(-maxSize);
+            ind.volumeMA = ind.volumeMA.slice(-maxSize);
 
             this.processedCandles++;
             if (this.processedCandles % 100 === 0) {
@@ -287,6 +337,7 @@ export class SignalsService {
             await this.checkForSignals(symbol, candle);
         } catch (error) {
             console.error(`Error processing candle for ${symbol}:`, error);
+            console.error(error.stack);
         }
     }
 
@@ -550,20 +601,6 @@ export class SignalsService {
             if (error.message.includes('pako')) {
                 console.error('Data decompression error. Raw data:', data);
             }
-        }
-    }
-
-    updateCandleHistory(symbol, candle) {
-        if (!this.candleHistory.has(symbol)) {
-            this.candleHistory.set(symbol, []);
-        }
-        
-        const history = this.candleHistory.get(symbol);
-        history.push(candle);
-        
-        // Keep last 100 candles for analysis
-        if (history.length > 100) {
-            history.shift();
         }
     }
 
