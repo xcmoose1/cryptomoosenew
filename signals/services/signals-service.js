@@ -57,9 +57,11 @@ export class SignalsService {
             
             // Send initial status update
             this.printSystemStatus();
+            
+            return true;
         } catch (error) {
             console.error('Error initializing services:', error);
-            throw error;
+            return false;
         }
     }
 
@@ -713,44 +715,58 @@ export class SignalsService {
     }
 
     async sendSignal(signal) {
-        console.log('\n=== SIGNAL BROADCAST STARTED ===');
-        console.log('Signal to broadcast:', {
-            type: signal.type,
-            symbol: signal.symbol,
-            price: signal.price,
-            timestamp: new Date().toISOString()
-        });
+        try {
+            // Format the signal message
+            const message = this.formatSignalMessage(signal);
+            
+            // Send to Telegram if service is available
+            if (this.telegramService) {
+                await this.telegramService.sendMessage(message);
+            } else {
+                console.log('Telegram service not available, printing signal locally:');
+                console.log(message);
+            }
 
-        // Calculate prices
-        const entryPrice = signal.price;
-        const stopLossPrice = signal.type === 'BUY' 
-            ? entryPrice * 0.99  // 1% below entry for buy
-            : entryPrice * 1.01; // 1% above entry for sell
+            // Broadcast to WebSocket clients
+            this.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify({
+                        type: 'signal',
+                        data: signal
+                    }));
+                }
+            });
+
+            // Store the signal
+            if (!this.lastSignals.has(signal.symbol)) {
+                this.lastSignals.set(signal.symbol, []);
+            }
+            const signals = this.lastSignals.get(signal.symbol);
+            signals.push({
+                ...signal,
+                timestamp: Date.now()
+            });
+
+            // Keep only last 10 signals per symbol
+            if (signals.length > 10) {
+                signals.shift();
+            }
+
+            console.log(`✅ Signal sent for ${signal.symbol}`);
+        } catch (error) {
+            console.error('Error sending signal:', error);
+        }
+    }
+
+    formatSignalMessage(signal) {
+        const marketTrend = signal.trend === 'bullish' ? '📈 Bullish' : '📉 Bearish';
         
-        // Calculate targets (these are examples)
-        const target1 = signal.type === 'BUY' ? entryPrice * 1.005 : entryPrice * 0.995;
-        const target2 = signal.type === 'BUY' ? entryPrice * 1.01 : entryPrice * 0.99;
-        const target3 = signal.type === 'BUY' ? entryPrice * 1.02 : entryPrice * 0.98;
+        return `
+🚨 <b>Trading Signal Alert</b> 🚨
 
-        // Determine market trend based on RSI
-        const marketTrend = signal.rsi > 60 ? 'BULLISH' : signal.rsi < 40 ? 'BEARISH' : 'NEUTRAL';
-
-        // Format confidence level based on indicators
-        const confidence = signal.rsi > 60 || signal.rsi < 40 ? 'HIGH' : 'MEDIUM';
-
-        // Format telegram message
-        const telegramMessage = `
-${signal.type === 'BUY' ? '🟢' : '🔴'} <b>SIGNAL ALERT: ${signal.type} ${signal.symbol}</b>
-
-💰 <b>Entry Zone:</b> ${entryPrice.toFixed(4)} - ${(entryPrice * 1.002).toFixed(4)}
-🛑 <b>Stop Loss:</b> ${stopLossPrice.toFixed(4)}
-
-🎯 <b>Targets:</b>
-1️⃣ ${target1.toFixed(4)}
-2️⃣ ${target2.toFixed(4)}
-3️⃣ ${target3.toFixed(4)}
-
-📊 <b>Risk/Reward Ratio:</b> 1:${((target2 - entryPrice)/(entryPrice - stopLossPrice)).toFixed(2)}
+🔸 <b>Symbol:</b> ${signal.symbol}
+🔸 <b>Price:</b> $${signal.price.toFixed(4)}
+🔸 <b>Time:</b> ${new Date().toLocaleString()}
 
 📈 <b>Market Analysis:</b>
 • Trend: ${marketTrend}
@@ -758,71 +774,17 @@ ${signal.type === 'BUY' ? '🟢' : '🔴'} <b>SIGNAL ALERT: ${signal.type} ${sig
 • Volume Ratio: ${signal.volumeRatio}x
 
 ⚡️ <b>Technical Indicators:</b>
-• MACD: ${signal.macd > 0 ? 'Bullish' : 'Bearish'}
-• EMA: Price ${signal.emaStatus}
-• SMA: Price ${signal.smaStatus}
+• Fast EMA: ${signal.emaFast.toFixed(4)}
+• Slow EMA: ${signal.emaSlow.toFixed(4)}
+• Volume MA: ${signal.volumeMA.toFixed(2)}
 
-🔄 <b>Trade on HTX:</b>
-${this.HTX_REFERRAL}
-• Up to 20% fee discount
-• $5000 sign-up bonus
-• Zero maker fees
+💡 <b>Signal Type:</b> ${signal.type}
+🎯 <b>Action:</b> ${signal.action.toUpperCase()}
 
-#${signal.symbol.replace('/', '')} #CryptoSignals #TradingSignals`;
+${signal.reason}
 
-        // Send to Telegram
-        console.log('Sending signal to Telegram...');
-        await this.telegramService.sendMessage(telegramMessage);
-        console.log('Signal sent to Telegram successfully');
-        
-        // Create a simplified version of the signal for WebSocket clients
-        const wsSignal = {
-            type: signal.type,
-            symbol: signal.symbol,
-            price: signal.price,
-            rsi: signal.rsi,
-            volumeRatio: signal.volumeRatio,
-            stopLoss: stopLossPrice,
-            targets: [target1, target2, target3],
-            confidence,
-            marketTrend,
-            timestamp: new Date().toISOString()
-        };
-
-        // Broadcast to all connected WebSocket clients
-        console.log(`Broadcasting signal to ${this.clients.size} WebSocket clients...`);
-        const wsMessage = JSON.stringify({
-            type: 'signal',
-            data: wsSignal
-        });
-        
-        let successCount = 0;
-        let failCount = 0;
-
-        this.clients.forEach(client => {
-            if (client.readyState === WebSocket.OPEN) {
-                try {
-                    client.send(wsMessage);
-                    successCount++;
-                    console.log('Signal sent to WebSocket client successfully');
-                } catch (error) {
-                    failCount++;
-                    console.error('Error sending signal to WebSocket client:', error);
-                }
-            } else {
-                console.log('Client not ready, state:', client.readyState);
-            }
-        });
-
-        console.log(`=== SIGNAL BROADCAST COMPLETED ===
-• Total WebSocket Clients: ${this.clients.size}
-• Successful Sends: ${successCount}
-• Failed Sends: ${failCount}
-• Signal Type: ${signal.type}
-• Symbol: ${signal.symbol}
-• Price: ${signal.price}
-• Timestamp: ${new Date().toISOString()}
-========================\n`);
+🔗 <a href="${SIGNALS_CONFIG.REFERRAL_LINK}">Trade on HTX</a>
+`;
     }
 
     handleWebSocketConnection(ws) {
