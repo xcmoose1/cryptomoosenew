@@ -89,40 +89,147 @@ export class SignalsService {
             const formattedSymbol = this.formatSymbol(symbol);
             const url = `${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${limit}`;
             
-            console.log(`Fetching historical data from: ${url}`);
+            console.log(`Fetching historical data for ${symbol}...`);
             const response = await fetch(url);
             const data = await response.json();
-            
-            if (!response.ok) {
-                console.error(`HTTP error for ${symbol}:`, data);
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            if (data.status === 'ok' && Array.isArray(data.data)) {
-                // HTX returns data in reverse chronological order, so we reverse it
-                const candles = data.data.reverse().map(k => ({
-                    time: k.id * 1000, // Convert to milliseconds
-                    open: k.open,
-                    high: k.high,
-                    low: k.low,
-                    close: k.close,
-                    volume: k.vol
+
+            if (data.status === 'ok' && data.data) {
+                // HTX returns data in reverse chronological order, so we need to reverse it
+                const candles = data.data.reverse().map(candle => ({
+                    time: candle.id * 1000,
+                    open: candle.open,
+                    high: candle.high,
+                    low: candle.low,
+                    close: candle.close,
+                    volume: candle.vol
                 }));
+
+                // Initialize or update candle history
+                if (!this.candleHistory.has(formattedSymbol)) {
+                    this.candleHistory.set(formattedSymbol, []);
+                }
+                const history = this.candleHistory.get(formattedSymbol);
+                history.push(...candles);
+
+                // Keep only the most recent candles
+                const maxCandles = Math.max(
+                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 3,
+                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 3,
+                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 3
+                );
+                if (history.length > maxCandles) {
+                    history.splice(0, history.length - maxCandles);
+                }
+
+                console.log(`✅ Loaded ${candles.length} historical candles for ${symbol}`);
                 
-                this.candleHistory.set(symbol, candles);
-                console.log(`Loaded ${candles.length} historical candles for ${symbol}`);
-                return candles;
+                // Initialize indicators for this symbol
+                await this.initializeIndicators(formattedSymbol);
             } else {
-                console.error(`Invalid response data for ${symbol}:`, data);
-                // Initialize with empty array but don't throw error to allow other pairs to continue
-                this.candleHistory.set(symbol, []);
-                return [];
+                console.error(`Failed to fetch historical data for ${symbol}:`, data);
             }
         } catch (error) {
             console.error(`Error fetching historical data for ${symbol}:`, error);
-            // Initialize with empty array to allow other pairs to continue
-            this.candleHistory.set(symbol, []);
-            return [];
+        }
+    }
+
+    async initializeIndicators(symbol) {
+        if (!this.indicators.has(symbol)) {
+            this.indicators.set(symbol, {
+                emaFast: [],
+                emaSlow: [],
+                rsi: [],
+                volumeMA: []
+            });
+        }
+
+        const candles = this.candleHistory.get(symbol);
+        if (!candles || candles.length === 0) {
+            console.log(`No historical data available for ${symbol}`);
+            return;
+        }
+
+        const ind = this.indicators.get(symbol);
+        const closes = candles.map(c => c.close);
+        const volumes = candles.map(c => c.volume);
+
+        // Calculate initial EMAs
+        const fastPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD;
+        const slowPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD;
+        
+        ind.emaFast = EMA.calculate({
+            period: fastPeriod,
+            values: closes
+        });
+
+        ind.emaSlow = EMA.calculate({
+            period: slowPeriod,
+            values: closes
+        });
+
+        // Calculate initial RSI
+        ind.rsi = RSI.calculate({
+            period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+            values: closes
+        });
+
+        // Calculate initial Volume MA
+        ind.volumeMA = SMA.calculate({
+            period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
+            values: volumes
+        });
+
+        console.log(`✅ Initialized indicators for ${symbol}`);
+    }
+
+    async processCandle(symbol, candle) {
+        try {
+            if (!this.indicators.has(symbol)) {
+                await this.initializeIndicators(symbol);
+            }
+
+            const ind = this.indicators.get(symbol);
+            if (!ind) {
+                console.error(`No indicators available for ${symbol}`);
+                return;
+            }
+
+            // Update EMAs
+            const close = candle.close;
+            const fastAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD + 1);
+            const slowAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD + 1);
+
+            if (ind.emaFast.length > 0) {
+                const newFastEMA = (close - ind.emaFast[ind.emaFast.length - 1]) * fastAlpha + ind.emaFast[ind.emaFast.length - 1];
+                ind.emaFast.push(newFastEMA);
+            }
+
+            if (ind.emaSlow.length > 0) {
+                const newSlowEMA = (close - ind.emaSlow[ind.emaSlow.length - 1]) * slowAlpha + ind.emaSlow[ind.emaSlow.length - 1];
+                ind.emaSlow.push(newSlowEMA);
+            }
+
+            // Keep indicator arrays at a reasonable size
+            const maxSize = Math.max(
+                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
+                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
+                SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
+            );
+
+            if (ind.emaFast.length > maxSize) ind.emaFast.shift();
+            if (ind.emaSlow.length > maxSize) ind.emaSlow.shift();
+            if (ind.rsi.length > maxSize) ind.rsi.shift();
+            if (ind.volumeMA.length > maxSize) ind.volumeMA.shift();
+
+            this.processedCandles++;
+            if (this.processedCandles % 100 === 0) {
+                console.log(`🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
+            }
+
+            // Check for signals
+            await this.checkForSignals(symbol, candle);
+        } catch (error) {
+            console.error(`Error processing candle for ${symbol}:`, error);
         }
     }
 
@@ -396,7 +503,7 @@ export class SignalsService {
                 }
 
                 if (this.isInitialized) {
-                    await this.processSignals(symbol);
+                    await this.processCandle(symbol, candle);
                 }
             }
         } catch (error) {
@@ -421,38 +528,95 @@ export class SignalsService {
         }
     }
 
-    async processSignals(symbol) {
+    async processCandle(symbol, candle) {
         try {
-            if (!this.isIndicatorReady(symbol)) {
-                console.log(`Waiting for previous EMA values for ${symbol}`);
+            if (!this.indicators.has(symbol)) {
+                await this.initializeIndicators(symbol);
+            }
+
+            const ind = this.indicators.get(symbol);
+            if (!ind) {
+                console.error(`No indicators available for ${symbol}`);
                 return;
             }
 
-            const indicators = this.indicators.get(symbol);
-            if (!indicators) {
-                console.error(`No indicators found for ${symbol}`);
+            // Update EMAs
+            const close = candle.close;
+            const fastAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD + 1);
+            const slowAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD + 1);
+
+            if (ind.emaFast.length > 0) {
+                const newFastEMA = (close - ind.emaFast[ind.emaFast.length - 1]) * fastAlpha + ind.emaFast[ind.emaFast.length - 1];
+                ind.emaFast.push(newFastEMA);
+            }
+
+            if (ind.emaSlow.length > 0) {
+                const newSlowEMA = (close - ind.emaSlow[ind.emaSlow.length - 1]) * slowAlpha + ind.emaSlow[ind.emaSlow.length - 1];
+                ind.emaSlow.push(newSlowEMA);
+            }
+
+            // Keep indicator arrays at a reasonable size
+            const maxSize = Math.max(
+                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
+                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
+                SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
+            );
+
+            if (ind.emaFast.length > maxSize) ind.emaFast.shift();
+            if (ind.emaSlow.length > maxSize) ind.emaSlow.shift();
+            if (ind.rsi.length > maxSize) ind.rsi.shift();
+            if (ind.volumeMA.length > maxSize) ind.volumeMA.shift();
+
+            this.processedCandles++;
+            if (this.processedCandles % 100 === 0) {
+                console.log(`🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
+            }
+
+            // Check for signals
+            await this.checkForSignals(symbol, candle);
+        } catch (error) {
+            console.error(`Error processing candle for ${symbol}:`, error);
+        }
+    }
+
+    async checkForSignals(symbol, candle) {
+        try {
+            if (!this.indicators.has(symbol)) {
+                await this.initializeIndicators(symbol);
+            }
+
+            const ind = this.indicators.get(symbol);
+            if (!ind) {
+                console.error(`No indicators available for ${symbol}`);
                 return;
             }
 
             // Get the latest indicator values
-            const rsi = indicators.rsi.getResult().slice(-1)[0];
-            const emaFast = indicators.emaFast.getResult().slice(-1)[0];
-            const emaSlow = indicators.emaSlow.getResult().slice(-1)[0];
-            const volumeMA = indicators.volumeMA.getResult().slice(-1)[0];
+            const rsi = ind.rsi[ind.rsi.length - 1];
+            const emaFast = ind.emaFast[ind.emaFast.length - 1];
+            const emaSlow = ind.emaSlow[ind.emaSlow.length - 1];
+            const volumeMA = ind.volumeMA[ind.volumeMA.length - 1];
 
             const history = this.candleHistory.get(symbol);
             const closes = history.map(c => c.close);
             const volumes = history.map(c => c.volume);
 
             // Calculate indicators
-            indicators.rsi.nextValue(closes[closes.length - 1]);
-            indicators.emaFast.nextValue(closes[closes.length - 1]);
-            indicators.emaSlow.nextValue(closes[closes.length - 1]);
-            indicators.volumeMA.nextValue(volumes[volumes.length - 1]);
+            const newRSI = RSI.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+                values: closes
+            });
+            ind.rsi.push(newRSI[newRSI.length - 1]);
+
+            const newVolumeMA = SMA.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
+                values: volumes
+            });
+            ind.volumeMA.push(newVolumeMA[newVolumeMA.length - 1]);
 
             // Get previous values for crossover detection
-            const prevEmaFast = indicators.emaFast.result[indicators.emaFast.result.length - 2];
-            const prevEmaSlow = indicators.emaSlow.result[indicators.emaSlow.result.length - 2];
+            const prevEmaFast = ind.emaFast[ind.emaFast.length - 2];
+            const prevEmaSlow = ind.emaSlow[ind.emaSlow.length - 2];
             
             // Skip if we don't have previous values yet
             if (!prevEmaFast || !prevEmaSlow) {
@@ -519,7 +683,7 @@ export class SignalsService {
                 }
             }
         } catch (error) {
-            console.error('Error processing signals:', error);
+            console.error('Error checking for signals:', error);
         }
     }
 
@@ -566,7 +730,7 @@ ${signal.type === 'BUY' ? '🟢' : '🔴'} <b>SIGNAL ALERT: ${signal.type} ${sig
 📈 <b>Market Analysis:</b>
 • Trend: ${marketTrend}
 • RSI: ${signal.rsi.toFixed(2)}
-• Volume Ratio: ${signal.volumeRatio.toFixed(2)}x
+• Volume Ratio: ${signal.volumeRatio}x
 
 ⚡️ <b>Technical Indicators:</b>
 • MACD: ${signal.macd > 0 ? 'Bullish' : 'Bearish'}
