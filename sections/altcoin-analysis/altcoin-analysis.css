@@ -10,7 +10,7 @@
     max-width: 1400px;
 }
 
-.altcoin-analysis-section .section-header {
+.section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -19,7 +19,7 @@
     margin-bottom: 20px;
 }
 
-.altcoin-analysis-section .section-header h3 {
+.section-header h3 {
     color: var(--color-primary);
     font-size: 1.5rem;
     font-weight: 600;
@@ -197,7 +197,7 @@
         padding: 20px;
     }
     
-    .altcoin-analysis-section .section-header {
+    .section-header {
         flex-direction: column;
         align-items: flex-start;
         gap: 15px;

@@ -183,120 +183,63 @@ http://localhost:3000
 - `PORT`: Server port (default: 3000)
 - `NODE_ENV`: Environment mode (development/production)
 
-## Troubleshooting
+## Troubleshooting Guide
 
-### Daily Digest Issues
+### Common Issues and Solutions
 
-#### 1. "Cannot GET /daily_digest.html" Error
-If you see this error, check that:
-- The server is running (`node server/server.js`)
-- Static file serving is properly configured in `server.js`
-- The file exists in the root directory
+#### 1. Sections Not Loading
+- **Issue**: Dashboard sections (Market Analysis, Altcoin Analysis, etc.) not appearing
+- **Solutions**:
+  - Check browser console for JavaScript errors
+  - Verify all section files exist in correct structure: `/sections/{section-name}/{section-name}.{html|js|css}`
+  - Clear browser cache and refresh
+  - Ensure section loader is properly initialized in members.html
 
-Solution:
-```javascript
-// In server.js, ensure you have:
-app.use(express.static(path.join(__dirname, '..'), {
-    setHeaders: (res, path) => {
-        if (path.endsWith('.js')) {
-            res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
-        } else if (path.endsWith('.html')) {
-            res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        } else if (path.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css; charset=utf-8');
-        }
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-    }
-}));
-```
+#### 2. API Rate Limits
+- **Issue**: Data not updating or showing errors
+- **Solutions**:
+  - Check API rate limit status in browser console
+  - Verify request throttling is working (2-second delay between requests)
+  - Use cached data when available (24-hour cache for most endpoints)
+  - If persistent, consider upgrading to API pro plans
 
-#### 2. "Failed to fetch digest" Error
-This usually occurs when:
-- The data directory doesn't exist
-- Cache file permissions are incorrect
-- OpenAI API key is missing or invalid
+#### 3. Performance Issues
+- **Issue**: Slow loading times or high CPU usage
+- **Solutions**:
+  - Enable browser caching
+  - Check network tab for large file transfers
+  - Verify update intervals are not too frequent
+  - Monitor memory usage in browser dev tools
 
-Solutions:
-1. Check data directory:
-```javascript
-// In daily-digest-service.js:
-const dataDir = path.join(process.cwd(), 'data');
-if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-}
-```
+#### 4. Data Inconsistencies
+- **Issue**: Incorrect or outdated market data
+- **Solutions**:
+  - Clear local storage cache
+  - Check API endpoint status
+  - Verify timezone settings
+  - Ensure all services are properly initialized
 
-2. Verify environment variables:
-```bash
-# In .env file:
-OPENAI_API_KEY=your_api_key_here
-```
+#### 5. UI/Layout Problems
+- **Issue**: Broken layouts or styling issues
+- **Solutions**:
+  - Verify CSS classes are not duplicated
+  - Check responsive design breakpoints
+  - Clear browser cache and reload
+  - Test in different browsers
 
-3. Clear the cache:
-```bash
-rm -f data/daily_digest_cache.json
-```
+### Getting Help
+If you encounter issues not covered here:
+1. Check the latest commits in the repository
+2. Open an issue with detailed description and screenshots
+3. Join our community chat for real-time support
+4. Review documentation for recent changes
 
-#### 3. WebSocket Connection Issues
-If you see WebSocket errors:
-1. Check that the WebSocket server is properly initialized
-2. Ensure proper error handling is in place
-3. Verify the client is using the correct WebSocket URL
-
-Solution:
-```javascript
-// In server.js:
-const wss = new WebSocketServer({ server });
-
-wss.on('connection', (ws) => {
-    ws.isAlive = true;
-    ws.on('pong', () => { ws.isAlive = true; });
-    ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-    });
-});
-```
-
-### Market Overview Issues
-
-#### 1. "Failed to parse market analysis response" Error
-This error occurs when there's an issue with the OpenAI API response. To fix:
-- Check that your OpenAI API key is valid and properly set in `.env`
-- Ensure you have sufficient API credits
-- Try refreshing the page and clicking the update button again
-- Check the browser console and server logs for specific error details
-
-If the error persists:
-1. Stop the server
-2. Clear the browser cache
-3. Delete the `.env` file and recreate it with your API key
-4. Restart the server with `node server/server.js`
-
-#### 2. Loading State Stuck
-If the market overview stays in "Loading..." state:
-- Check that the server is running
-- Verify your internet connection
-- Check the browser console for errors
-- Try closing and reopening the modal
-
-#### 3. Missing or Incorrect Data
-If you see incomplete or incorrect market data:
-- Ensure CoinGecko API is accessible (sometimes it has rate limits)
-- Check that all required environment variables are set
-- Try clearing your browser cache
-- Restart the server
-
-### General Debugging Tips
-1. Check server logs for errors
-2. Verify all required dependencies are installed
-3. Ensure proper CORS headers are set
-4. Check file permissions in the data directory
-5. Verify API keys and environment variables
-
-For any other issues, please submit a GitHub issue with:
-- Error message and stack trace
-- Steps to reproduce
-- Environment details (Node.js version, OS, etc.)
+### Contributing
+Found a bug or want to contribute a fix? Please:
+1. Fork the repository
+2. Create a feature branch
+3. Submit a pull request with detailed description
+4. Include any relevant updates to this troubleshooting guide
 
 ## Features in Development
 - Enhanced social sentiment analysis
