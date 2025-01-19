@@ -104,13 +104,12 @@ class RateLimiter {
 // Create Express app
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
 
 // Initialize services
 async function initializeServices() {
     // Initialize SignalsService with the main WebSocket server
     const signalsService = new (await import('../signals/services/signals-service.js')).SignalsService();
-    await signalsService.initialize(wss);
+    await signalsService.initialize();
     await signalsService.initializeService();
     return signalsService;
 }
@@ -193,53 +192,48 @@ app.get('/daily-digest', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'daily_digest.html'));
 });
 
-// WebSocket connection handling
-wss.on('connection', (ws, req) => {
-    console.log('New WebSocket connection');
-    ws.isAlive = true;
-
-    ws.on('pong', () => {
-        ws.isAlive = true;
-    });
-
-    // Handle connection close
-    ws.on('close', () => {
-        console.log('WebSocket connection closed');
-        if (ws.pingInterval) {
-            clearInterval(ws.pingInterval);
-        }
-    });
-
-    // Set up ping interval for this connection
-    ws.pingInterval = setInterval(() => {
-        if (!ws.isAlive) {
-            console.log('Terminating dead connection');
-            ws.terminate();
-            return;
-        }
-        ws.isAlive = false;
-        ws.ping();
-    }, 30000);
-
-    // Send initial connection success message
-    ws.send(JSON.stringify({
-        type: 'connection',
-        status: 'connected',
-        timestamp: Date.now()
-    }));
+// Health check endpoint
+app.get('/healthz', (req, res) => {
+    res.status(200).json({ status: 'healthy' });
 });
 
-// Handle WebSocket server errors
-wss.on('error', (error) => {
-    console.error('WebSocket server error:', error);
+// Initialize services and start server
+const PORT = process.env.PORT || 3000;
+const WS_PORT = process.env.WS_PORT || 10000;
+
+initializeServices().then(signalsService => {
+    // Create a separate server for WebSocket
+    const wsServer = http.createServer();
+    const wss = new WebSocketServer({ server: wsServer });
+
+    wss.on('connection', (ws) => {
+        console.log('WebSocket client connected');
+        signalsService.handleWebSocketConnection(ws);
+    });
+
+    // Start main HTTP server
+    server.listen(PORT, () => {
+        console.log(`HTTP Server running on port ${PORT}`);
+    });
+
+    // Start WebSocket server
+    wsServer.listen(WS_PORT, () => {
+        console.log(`WebSocket Server running on port ${WS_PORT}`);
+    });
+}).catch(error => {
+    console.error('Error initializing services:', error);
+    process.exit(1);
 });
 
-// Clean up on server close
-wss.on('close', () => {
-    wss.clients.forEach((client) => {
-        if (client.pingInterval) {
-            clearInterval(client.pingInterval);
-        }
+// Handle server shutdown gracefully
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received. Shutting down gracefully...');
+    server.close(() => {
+        console.log('HTTP Server closed');
+        wsServer.close(() => {
+            console.log('WebSocket Server closed');
+            process.exit(0);
+        });
     });
 });
 
@@ -258,26 +252,6 @@ const HTX_TIMEFRAMES = {
     '1d': '1day',
     '1w': '1week',
     '1M': '1mon'
-};
-
-// Initialize services and start server
-const PORT = process.env.PORT || 3000;
-initializeServices().then(signalsService => {
-    server.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-    });
-}).catch(error => {
-    console.error('Error initializing services:', error);
-    process.exit(1);
-});
-
-// Handle server shutdown gracefully
-process.on('SIGTERM', () => {
-    console.log('SIGTERM received. Shutting down gracefully...');
-    server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
-    });
 });
 
 process.on('uncaughtException', (error) => {

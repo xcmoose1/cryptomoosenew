@@ -36,19 +36,7 @@ export class SignalsService {
             
             // Mark this connection as a signals client
             ws.isSignalsClient = true;
-            this.clients.add(ws);
-            
-            ws.on('close', () => {
-                console.log('Client disconnected from signals WebSocket');
-                this.clients.delete(ws);
-            });
-
-            // Send initial connection acknowledgment
-            ws.send(JSON.stringify({
-                type: 'signals_connection',
-                status: 'connected',
-                message: 'Connected to signals service'
-            }));
+            this.handleWebSocketConnection(ws);
         });
 
         // HTX Referral Link
@@ -664,6 +652,55 @@ ${this.HTX_REFERRAL}
 • Price: ${signal.price}
 • Timestamp: ${new Date().toISOString()}
 ========================\n`);
+    }
+
+    handleWebSocketConnection(ws) {
+        console.log('New WebSocket client connected');
+        
+        // Add to clients set
+        this.clients.add(ws);
+
+        // Setup ping-pong
+        ws.isAlive = true;
+        ws.on('pong', () => {
+            ws.isAlive = true;
+        });
+
+        // Handle client messages
+        ws.on('message', async (data) => {
+            try {
+                const message = JSON.parse(data);
+                console.log('Received message from client:', message);
+                // Handle client messages if needed
+            } catch (error) {
+                console.error('Error handling client message:', error);
+            }
+        });
+
+        // Handle client disconnect
+        ws.on('close', () => {
+            console.log('WebSocket client disconnected');
+            this.clients.delete(ws);
+        });
+
+        // Send initial connection success message
+        ws.send(JSON.stringify({
+            type: 'connection',
+            status: 'connected',
+            timestamp: Date.now()
+        }));
+
+        // Set up ping interval for this connection
+        const pingInterval = setInterval(() => {
+            if (!ws.isAlive) {
+                console.log('Terminating inactive client connection');
+                clearInterval(pingInterval);
+                ws.terminate();
+                return;
+            }
+            ws.isAlive = false;
+            ws.ping();
+        }, 30000);
     }
 }
 
