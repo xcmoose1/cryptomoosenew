@@ -107,7 +107,7 @@ const server = http.createServer(app);
 
 // Initialize services
 async function initializeServices() {
-    // Initialize SignalsService with the main WebSocket server
+    console.log('Initializing services...');
     const signalsService = new (await import('../signals/services/signals-service.js')).SignalsService();
     await signalsService.initialize();
     await signalsService.initializeService();

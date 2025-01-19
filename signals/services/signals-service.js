@@ -4,12 +4,10 @@ import { createTelegramService } from './telegram-service.js';
 import pako from 'pako';
 
 export class SignalsService {
-    async initialize(wss = null) {
+    constructor() {
         this.ws = null;
+        this.clients = new Set();
         this.candleHistory = new Map();
-        this.indicators = new Map();
-        this.lastSignals = new Map();
-        this.telegramService = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 5000;
@@ -17,34 +15,52 @@ export class SignalsService {
         this.lastStatusUpdate = Date.now();
         this.statusUpdateInterval = 5 * 60 * 1000; // 5 minutes
         this.processedCandles = 0;
-        this.clients = new Set(); // WebSocket clients
-        
-        // If no WebSocket server is provided, create one
-        if (!wss) {
-            const { WebSocketServer } = await import('ws');
-            const port = process.env.PORT || 8081;
-            console.log('Starting standalone WebSocket server on port:', port);
-            this.wss = new WebSocketServer({ port });
-        } else {
-            console.log('Using shared WebSocket server');
-            this.wss = wss;
-        }
-        
-        // Handle WebSocket connections
-        this.wss.on('connection', (ws) => {
-            console.log('New client connected to signals WebSocket');
-            
-            // Mark this connection as a signals client
-            ws.isSignalsClient = true;
-            this.handleWebSocketConnection(ws);
-        });
-
-        // HTX Referral Link
-        this.HTX_REFERRAL = 'https://www.htx.com/en-us/invite/0f?invite_code=9ujn2223';
+        this.indicators = new Map();
+        this.lastSignals = new Map();
+        this.telegramService = null;
     }
 
-    constructor() {
-        // Initialize will be called separately
+    async initialize() {
+        try {
+            await this.setupWebSocket();
+            console.log('SignalsService initialized successfully');
+        } catch (error) {
+            console.error('Error initializing SignalsService:', error);
+            throw error;
+        }
+    }
+
+    async initializeService() {
+        try {
+            // Initialize TelegramService
+            this.telegramService = createTelegramService();
+            
+            // Start status updates
+            this.startStatusUpdates();
+            
+            // Fetch historical data for all pairs
+            console.log('\n📊 Fetching historical data for all pairs...');
+            const historyPromises = SIGNALS_CONFIG.TRADING_PAIRS.map(pair => 
+                this.fetchHistoricalData(pair, Math.max(
+                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
+                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
+                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
+                ))
+            );
+            
+            await Promise.all(historyPromises);
+            console.log('✅ Historical data fetched for all pairs');
+            
+            await this.setupIndicators();
+            this.isInitialized = true;
+            console.log('\n🚀 SignalsService initialized successfully\n');
+            
+            // Send initial status update
+            this.printSystemStatus();
+        } catch (error) {
+            console.error('Error initializing services:', error);
+            throw error;
+        }
     }
 
     formatSymbol(symbol) {
@@ -107,40 +123,6 @@ export class SignalsService {
             // Initialize with empty array to allow other pairs to continue
             this.candleHistory.set(symbol, []);
             return [];
-        }
-    }
-
-    async initializeService() {
-        try {
-            console.log('\n=== Initializing SignalsService ===');
-            this.telegramService = createTelegramService();
-            
-            // Start status updates
-            this.startStatusUpdates();
-            
-            // Fetch historical data for all pairs
-            console.log('\n📊 Fetching historical data for all pairs...');
-            const historyPromises = SIGNALS_CONFIG.TRADING_PAIRS.map(pair => 
-                this.fetchHistoricalData(pair, Math.max(
-                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
-                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
-                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
-                ))
-            );
-            
-            await Promise.all(historyPromises);
-            console.log('✅ Historical data fetched for all pairs');
-            
-            await this.setupIndicators();
-            await this.setupWebSocket();
-            this.isInitialized = true;
-            console.log('\n🚀 SignalsService initialized successfully\n');
-            
-            // Send initial status update
-            this.printSystemStatus();
-        } catch (error) {
-            console.error('❌ Failed to initialize SignalsService:', error);
-            throw error;
         }
     }
 
