@@ -134,92 +134,149 @@ export class SignalsService {
     }
 
     async initializeIndicators(symbol) {
-        if (!this.indicators.has(symbol)) {
-            this.indicators.set(symbol, {
-                emaFast: [],
-                emaSlow: [],
-                rsi: [],
-                volumeMA: []
+        try {
+            if (!this.indicators.has(symbol)) {
+                this.indicators.set(symbol, {
+                    emaFast: [],
+                    emaSlow: [],
+                    rsi: [],
+                    volumeMA: []
+                });
+            }
+
+            const candles = this.candleHistory.get(symbol);
+            if (!candles || candles.length === 0) {
+                console.log(`No historical data available for ${symbol}`);
+                return false;
+            }
+
+            const ind = this.indicators.get(symbol);
+            const closes = candles.map(c => parseFloat(c.close));
+            const volumes = candles.map(c => parseFloat(c.volume));
+
+            // Calculate initial EMAs
+            const fastPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD;
+            const slowPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD;
+            
+            // Calculate EMAs using SMA for the first value
+            const fastSMA = closes.slice(0, fastPeriod).reduce((a, b) => a + b) / fastPeriod;
+            const slowSMA = closes.slice(0, slowPeriod).reduce((a, b) => a + b) / slowPeriod;
+            
+            ind.emaFast = [fastSMA];
+            ind.emaSlow = [slowSMA];
+
+            // Calculate subsequent EMA values
+            const fastAlpha = 2 / (fastPeriod + 1);
+            const slowAlpha = 2 / (slowPeriod + 1);
+
+            for (let i = fastPeriod; i < closes.length; i++) {
+                const prevFastEMA = ind.emaFast[ind.emaFast.length - 1];
+                const newFastEMA = (closes[i] - prevFastEMA) * fastAlpha + prevFastEMA;
+                ind.emaFast.push(newFastEMA);
+            }
+
+            for (let i = slowPeriod; i < closes.length; i++) {
+                const prevSlowEMA = ind.emaSlow[ind.emaSlow.length - 1];
+                const newSlowEMA = (closes[i] - prevSlowEMA) * slowAlpha + prevSlowEMA;
+                ind.emaSlow.push(newSlowEMA);
+            }
+
+            // Calculate RSI
+            ind.rsi = RSI.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+                values: closes
             });
-        }
 
-        const candles = this.candleHistory.get(symbol);
-        if (!candles || candles.length === 0) {
-            console.log(`No historical data available for ${symbol}`);
-            return;
-        }
+            // Calculate Volume MA
+            ind.volumeMA = SMA.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
+                values: volumes
+            });
 
+            console.log(`✅ Initialized indicators for ${symbol} with ${ind.emaFast.length} EMA values`);
+            return true;
+        } catch (error) {
+            console.error(`Error initializing indicators for ${symbol}:`, error);
+            return false;
+        }
+    }
+
+    isIndicatorReady(symbol) {
         const ind = this.indicators.get(symbol);
-        const closes = candles.map(c => c.close);
-        const volumes = candles.map(c => c.volume);
+        if (!ind) return false;
 
-        // Calculate initial EMAs
-        const fastPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD;
-        const slowPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD;
-        
-        ind.emaFast = EMA.calculate({
-            period: fastPeriod,
-            values: closes
-        });
+        const minLength = Math.max(
+            SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+            SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+            SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD
+        );
 
-        ind.emaSlow = EMA.calculate({
-            period: slowPeriod,
-            values: closes
-        });
-
-        // Calculate initial RSI
-        ind.rsi = RSI.calculate({
-            period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
-            values: closes
-        });
-
-        // Calculate initial Volume MA
-        ind.volumeMA = SMA.calculate({
-            period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
-            values: volumes
-        });
-
-        console.log(`✅ Initialized indicators for ${symbol}`);
+        return ind.emaFast.length >= minLength &&
+               ind.emaSlow.length >= minLength &&
+               ind.rsi.length >= SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD &&
+               ind.volumeMA.length >= SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD;
     }
 
     async processCandle(symbol, candle) {
         try {
             if (!this.indicators.has(symbol)) {
+                const initialized = await this.initializeIndicators(symbol);
+                if (!initialized) {
+                    console.log(`Failed to initialize indicators for ${symbol}`);
+                    return;
+                }
+            }
+
+            if (!this.isIndicatorReady(symbol)) {
                 await this.initializeIndicators(symbol);
+                if (!this.isIndicatorReady(symbol)) {
+                    console.log(`Still waiting for indicators to be ready for ${symbol}`);
+                    return;
+                }
             }
 
             const ind = this.indicators.get(symbol);
-            if (!ind) {
-                console.error(`No indicators available for ${symbol}`);
-                return;
-            }
+            const close = parseFloat(candle.close);
+            const volume = parseFloat(candle.volume);
 
             // Update EMAs
-            const close = candle.close;
             const fastAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD + 1);
             const slowAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD + 1);
 
-            if (ind.emaFast.length > 0) {
-                const newFastEMA = (close - ind.emaFast[ind.emaFast.length - 1]) * fastAlpha + ind.emaFast[ind.emaFast.length - 1];
-                ind.emaFast.push(newFastEMA);
-            }
+            const newFastEMA = (close - ind.emaFast[ind.emaFast.length - 1]) * fastAlpha + ind.emaFast[ind.emaFast.length - 1];
+            const newSlowEMA = (close - ind.emaSlow[ind.emaSlow.length - 1]) * slowAlpha + ind.emaSlow[ind.emaSlow.length - 1];
 
-            if (ind.emaSlow.length > 0) {
-                const newSlowEMA = (close - ind.emaSlow[ind.emaSlow.length - 1]) * slowAlpha + ind.emaSlow[ind.emaSlow.length - 1];
-                ind.emaSlow.push(newSlowEMA);
-            }
+            ind.emaFast.push(newFastEMA);
+            ind.emaSlow.push(newSlowEMA);
 
-            // Keep indicator arrays at a reasonable size
+            // Update RSI and Volume MA
+            const closes = [...this.candleHistory.get(symbol).map(c => parseFloat(c.close)), close];
+            const volumes = [...this.candleHistory.get(symbol).map(c => parseFloat(c.volume)), volume];
+
+            const newRSI = RSI.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+                values: closes
+            });
+
+            const newVolumeMA = SMA.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
+                values: volumes
+            });
+
+            ind.rsi = newRSI;
+            ind.volumeMA = newVolumeMA;
+
+            // Keep arrays at a reasonable size
             const maxSize = Math.max(
                 SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
                 SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
                 SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
             );
 
-            if (ind.emaFast.length > maxSize) ind.emaFast.shift();
-            if (ind.emaSlow.length > maxSize) ind.emaSlow.shift();
-            if (ind.rsi.length > maxSize) ind.rsi.shift();
-            if (ind.volumeMA.length > maxSize) ind.volumeMA.shift();
+            if (ind.emaFast.length > maxSize) ind.emaFast = ind.emaFast.slice(-maxSize);
+            if (ind.emaSlow.length > maxSize) ind.emaSlow = ind.emaSlow.slice(-maxSize);
+            if (ind.rsi.length > maxSize) ind.rsi = ind.rsi.slice(-maxSize);
+            if (ind.volumeMA.length > maxSize) ind.volumeMA = ind.volumeMA.slice(-maxSize);
 
             this.processedCandles++;
             if (this.processedCandles % 100 === 0) {
@@ -261,24 +318,6 @@ export class SignalsService {
         this.lastStatusUpdate = Date.now();
     }
 
-    isIndicatorReady(pair) {
-        const indicators = this.indicators.get(pair);
-        if (!indicators) return false;
-
-        // Check if all indicators have valid values
-        const lastRSI = indicators.rsi.getResult();
-        const lastEMAFast = indicators.emaFast.getResult();
-        const lastEMASlow = indicators.emaSlow.getResult();
-        const lastVolumeMA = indicators.volumeMA.getResult();
-
-        return (
-            Array.isArray(lastRSI) && lastRSI.length > 0 &&
-            Array.isArray(lastEMAFast) && lastEMAFast.length > 0 &&
-            Array.isArray(lastEMASlow) && lastEMASlow.length > 0 &&
-            Array.isArray(lastVolumeMA) && lastVolumeMA.length > 0
-        );
-    }
-
     async setupIndicators() {
         try {
             SIGNALS_CONFIG.TRADING_PAIRS.forEach(pair => {
@@ -288,8 +327,8 @@ export class SignalsService {
                     return;
                 }
 
-                const closes = history.map(c => c.close);
-                const volumes = history.map(c => c.volume);
+                const closes = history.map(c => parseFloat(c.close));
+                const volumes = history.map(c => parseFloat(c.volume));
 
                 // Check if we have enough data points
                 const requiredDataPoints = Math.max(
@@ -528,57 +567,6 @@ export class SignalsService {
         }
     }
 
-    async processCandle(symbol, candle) {
-        try {
-            if (!this.indicators.has(symbol)) {
-                await this.initializeIndicators(symbol);
-            }
-
-            const ind = this.indicators.get(symbol);
-            if (!ind) {
-                console.error(`No indicators available for ${symbol}`);
-                return;
-            }
-
-            // Update EMAs
-            const close = candle.close;
-            const fastAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD + 1);
-            const slowAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD + 1);
-
-            if (ind.emaFast.length > 0) {
-                const newFastEMA = (close - ind.emaFast[ind.emaFast.length - 1]) * fastAlpha + ind.emaFast[ind.emaFast.length - 1];
-                ind.emaFast.push(newFastEMA);
-            }
-
-            if (ind.emaSlow.length > 0) {
-                const newSlowEMA = (close - ind.emaSlow[ind.emaSlow.length - 1]) * slowAlpha + ind.emaSlow[ind.emaSlow.length - 1];
-                ind.emaSlow.push(newSlowEMA);
-            }
-
-            // Keep indicator arrays at a reasonable size
-            const maxSize = Math.max(
-                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
-                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
-                SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
-            );
-
-            if (ind.emaFast.length > maxSize) ind.emaFast.shift();
-            if (ind.emaSlow.length > maxSize) ind.emaSlow.shift();
-            if (ind.rsi.length > maxSize) ind.rsi.shift();
-            if (ind.volumeMA.length > maxSize) ind.volumeMA.shift();
-
-            this.processedCandles++;
-            if (this.processedCandles % 100 === 0) {
-                console.log(`🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
-            }
-
-            // Check for signals
-            await this.checkForSignals(symbol, candle);
-        } catch (error) {
-            console.error(`Error processing candle for ${symbol}:`, error);
-        }
-    }
-
     async checkForSignals(symbol, candle) {
         try {
             if (!this.indicators.has(symbol)) {
@@ -598,8 +586,8 @@ export class SignalsService {
             const volumeMA = ind.volumeMA[ind.volumeMA.length - 1];
 
             const history = this.candleHistory.get(symbol);
-            const closes = history.map(c => c.close);
-            const volumes = history.map(c => c.volume);
+            const closes = history.map(c => parseFloat(c.close));
+            const volumes = history.map(c => parseFloat(c.volume));
 
             // Calculate indicators
             const newRSI = RSI.calculate({
