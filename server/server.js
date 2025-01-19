@@ -237,8 +237,7 @@ process.on('SIGTERM', () => {
     });
 });
 
-// HTX timeframe mapping
-const HTX_TIMEFRAMES = {
+const timeframeMap = {
     '1m': '1min',
     '3m': '3min',
     '5m': '5min',
@@ -252,7 +251,7 @@ const HTX_TIMEFRAMES = {
     '1d': '1day',
     '1w': '1week',
     '1M': '1mon'
-});
+};
 
 process.on('uncaughtException', (error) => {
     console.error('Uncaught Exception:', error);
