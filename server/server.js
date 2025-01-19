@@ -256,6 +256,11 @@ const HTX_TIMEFRAMES = {
     '1M': '1mon'
 };
 
+// Health check endpoint for Render
+app.get('/healthz', (req, res) => {
+    res.status(200).json({ status: 'healthy' });
+});
+
 // Start the server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
