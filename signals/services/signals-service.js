@@ -38,20 +38,37 @@ export class SignalsService {
             // Start status updates
             this.startStatusUpdates();
             
-            // Fetch historical data for all pairs
-            console.log('\n📊 Fetching historical data for all pairs...');
-            const historyPromises = SIGNALS_CONFIG.TRADING_PAIRS.map(pair => 
-                this.fetchHistoricalData(pair, Math.max(
-                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
-                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
-                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
-                ))
+            console.log('\n🔄 Initializing SignalsService...');
+            console.log('📊 Preloading historical data for all pairs...');
+
+            // Calculate required candle history size
+            const requiredHistory = Math.max(
+                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 3,
+                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 3,
+                SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 3
             );
-            
+
+            // Fetch historical data for all pairs
+            const historyPromises = SIGNALS_CONFIG.TRADING_PAIRS.map(async (pair) => {
+                try {
+                    console.log(`📈 Fetching historical data for ${pair}...`);
+                    const candles = await this.fetchHistoricalData(pair, requiredHistory);
+                    if (candles && candles.length > 0) {
+                        console.log(`✅ Loaded ${candles.length} historical candles for ${pair}`);
+                        // Initialize indicators for this pair
+                        await this.initializeIndicators(pair);
+                    } else {
+                        console.error(`❌ Failed to load historical data for ${pair}`);
+                    }
+                } catch (error) {
+                    console.error(`❌ Error loading historical data for ${pair}:`, error);
+                }
+            });
+
+            // Wait for all historical data to be loaded
             await Promise.all(historyPromises);
-            console.log('✅ Historical data fetched for all pairs');
-            
-            await this.setupIndicators();
+            console.log('✅ Historical data loaded for all pairs');
+
             this.isInitialized = true;
             console.log('\n🚀 SignalsService initialized successfully\n');
             
@@ -67,15 +84,14 @@ export class SignalsService {
 
     formatSymbol(symbol) {
         // Convert BTC/USDT to btcusdt format for HTX API
-        // Also handle special cases for HTX
         const formatted = symbol.replace('/', '').toLowerCase();
         
-        // Special cases mapping for HTX
+        // Special cases mapping for HTX spot pairs
         const specialCases = {
-            'manausdt': 'sandusdt',  // MANA is listed as SAND on HTX
-            'oneusdtt': 'oneusdt'    // Fix ONE symbol
+            'hbarusdt': 'htusdt'     // HBAR is listed as HT
         };
 
+        // Check if we have a special case mapping
         return specialCases[formatted] || formatted;
     }
 
@@ -86,19 +102,26 @@ export class SignalsService {
         return `${base}/${quote}`;
     }
 
-    async fetchHistoricalData(symbol, limit = 100) {
+    async fetchHistoricalData(symbol, limit = 500) {
         try {
             const formattedSymbol = this.formatSymbol(symbol);
-            const url = `${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${limit}`;
+            console.log(`\n📊 Fetching ${limit} historical candles for ${symbol} (${formattedSymbol})...`);
             
-            console.log(`Fetching historical data for ${symbol}...`);
+            // Ensure we don't exceed API limits
+            const maxLimit = Math.min(limit, 1000); // HTX API limit
+            
+            const url = `${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${maxLimit}`;
+            console.log(`API URL: ${url}`);
+            
             const response = await fetch(url);
             const data = await response.json();
-
-            if (data.status === 'ok' && data.data) {
-                // HTX returns data in reverse chronological order, so we need to reverse it
+            
+            console.log(`API Response for ${formattedSymbol}:`, data);
+            
+            if (data['status'] === 'ok' && Array.isArray(data.data)) {
+                // Sort candles from oldest to newest
                 const candles = data.data.reverse().map(candle => ({
-                    time: candle.id * 1000,
+                    time: candle.id * 1000, // Convert to milliseconds
                     open: candle.open,
                     high: candle.high,
                     low: candle.low,
@@ -106,117 +129,94 @@ export class SignalsService {
                     volume: candle.vol
                 }));
 
-                // Initialize or update candle history
-                if (!this.candleHistory.has(formattedSymbol)) {
-                    this.candleHistory.set(formattedSymbol, []);
-                }
-                const history = this.candleHistory.get(formattedSymbol);
-                history.push(...candles);
-
-                // Keep only the most recent candles
-                const maxCandles = Math.max(
-                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 3,
-                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 3,
-                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 3
-                );
-                if (history.length > maxCandles) {
-                    history.splice(0, history.length - maxCandles);
-                }
-
-                console.log(`✅ Loaded ${candles.length} historical candles for ${symbol}`);
+                // Store in history
+                this.candleHistory.set(symbol, candles);
                 
-                // Initialize indicators for this symbol
-                await this.initializeIndicators(formattedSymbol);
+                console.log(`✅ Fetched ${candles.length} historical candles for ${symbol}`);
+                return candles;
             } else {
-                console.error(`Failed to fetch historical data for ${symbol}:`, data);
+                console.error(`❌ Failed to fetch historical data for ${symbol}:`, data['err-msg'] || 'Unknown error');
+                return null;
             }
         } catch (error) {
-            console.error(`Error fetching historical data for ${symbol}:`, error);
+            console.error(`❌ Error fetching historical data for ${symbol}:`, error);
+            return null;
         }
     }
 
     async initializeIndicators(symbol) {
         try {
-            if (!this.indicators.has(symbol)) {
-                this.indicators.set(symbol, {
-                    emaFast: [],
-                    emaSlow: [],
-                    rsi: [],
-                    volumeMA: []
-                });
-            }
-
-            const candles = this.candleHistory.get(symbol);
-            if (!candles || candles.length === 0) {
-                console.log(`No historical data available for ${symbol}`);
-                return false;
-            }
-
-            const ind = this.indicators.get(symbol);
-            const closes = candles.map(c => parseFloat(c.close));
-            const volumes = candles.map(c => parseFloat(c.volume));
-
-            // Calculate initial EMAs
-            const fastPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD;
-            const slowPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD;
+            console.log(`\n📊 Initializing indicators for ${symbol}...`);
             
-            // Calculate EMAs using SMA for the first value
-            const fastSMA = closes.slice(0, fastPeriod).reduce((a, b) => a + b) / fastPeriod;
-            const slowSMA = closes.slice(0, slowPeriod).reduce((a, b) => a + b) / slowPeriod;
-            
-            ind.emaFast = [fastSMA];
-            ind.emaSlow = [slowSMA];
-
-            // Calculate subsequent EMA values
-            const fastAlpha = 2 / (fastPeriod + 1);
-            const slowAlpha = 2 / (slowPeriod + 1);
-
-            for (let i = fastPeriod; i < closes.length; i++) {
-                const prevFastEMA = ind.emaFast[ind.emaFast.length - 1];
-                const newFastEMA = (closes[i] - prevFastEMA) * fastAlpha + prevFastEMA;
-                ind.emaFast.push(newFastEMA);
+            if (!this.candleHistory.has(symbol)) {
+                console.log(`No candle history for ${symbol}, fetching...`);
+                await this.fetchHistoricalData(symbol, Math.max(
+                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
+                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
+                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
+                ));
             }
 
-            for (let i = slowPeriod; i < closes.length; i++) {
-                const prevSlowEMA = ind.emaSlow[ind.emaSlow.length - 1];
-                const newSlowEMA = (closes[i] - prevSlowEMA) * slowAlpha + prevSlowEMA;
-                ind.emaSlow.push(newSlowEMA);
+            const history = this.candleHistory.get(symbol);
+            if (!history || history.length === 0) {
+                throw new Error(`No historical data available for ${symbol}`);
             }
+
+            // Extract close prices and volumes
+            const closes = history.map(candle => parseFloat(candle.close));
+            const volumes = history.map(candle => parseFloat(candle.volume));
+
+            // Calculate initial SMA for EMA
+            const smaFast = SMA.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
+                values: closes
+            });
+
+            const smaSlow = SMA.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+                values: closes
+            });
+
+            // Calculate EMAs using SMA as initial value
+            const emaFast = EMA.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
+                values: closes,
+                initValue: smaFast[0]
+            });
+
+            const emaSlow = EMA.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+                values: closes,
+                initValue: smaSlow[0]
+            });
 
             // Calculate RSI
-            ind.rsi = RSI.calculate({
+            const rsi = RSI.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
                 values: closes
             });
 
             // Calculate Volume MA
-            ind.volumeMA = SMA.calculate({
+            const volumeMA = SMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
                 values: volumes
             });
 
-            console.log(`✅ Initialized indicators for ${symbol} with ${ind.emaFast.length} EMA values`);
+            // Store indicators
+            this.indicators.set(symbol, {
+                emaFast,
+                emaSlow,
+                rsi,
+                volumeMA,
+                lastUpdate: Date.now()
+            });
+
+            console.log(`✅ Indicators initialized for ${symbol}`);
             return true;
         } catch (error) {
             console.error(`Error initializing indicators for ${symbol}:`, error);
             return false;
         }
-    }
-
-    isIndicatorReady(symbol) {
-        const ind = this.indicators.get(symbol);
-        if (!ind) return false;
-
-        const minLength = Math.max(
-            SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
-            SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
-            SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD
-        );
-
-        return ind.emaFast.length >= minLength &&
-               ind.emaSlow.length >= minLength &&
-               ind.rsi.length >= SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD &&
-               ind.volumeMA.length >= SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD;
     }
 
     async updateCandleHistory(symbol, candle) {
@@ -250,96 +250,146 @@ export class SignalsService {
 
     async processCandle(symbol, candle) {
         try {
-            // First update candle history
-            const historyUpdated = await this.updateCandleHistory(symbol, candle);
-            if (!historyUpdated) {
-                console.error(`Failed to update candle history for ${symbol}`);
+            // Initialize indicators if needed
+            if (!this.indicators.has(symbol)) {
+                await this.initializeIndicators(symbol);
                 return;
             }
 
-            if (!this.indicators.has(symbol)) {
-                const initialized = await this.initializeIndicators(symbol);
-                if (!initialized) {
-                    console.log(`Failed to initialize indicators for ${symbol}`);
-                    return;
-                }
-            }
-
-            if (!this.isIndicatorReady(symbol)) {
-                await this.initializeIndicators(symbol);
-                if (!this.isIndicatorReady(symbol)) {
-                    console.log(`Still waiting for indicators to be ready for ${symbol}`);
-                    return;
-                }
-            }
+            // Update candle history
+            await this.updateCandleHistory(symbol, candle);
 
             const ind = this.indicators.get(symbol);
+            if (!ind) {
+                console.error(`No indicators available for ${symbol}`);
+                return;
+            }
+
+            // Get history for calculations
             const history = this.candleHistory.get(symbol);
-            
-            // Get the last n+1 closes for EMA calculation
-            const closes = history.slice(-Math.max(
-                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
-                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD
-            ) - 1).map(c => parseFloat(c.close));
-            
-            // Add current candle
-            closes.push(parseFloat(candle.close));
-
-            // Update EMAs
-            const fastAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD + 1);
-            const slowAlpha = 2 / (SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD + 1);
-
-            if (ind.emaFast.length > 0) {
-                const prevFastEMA = ind.emaFast[ind.emaFast.length - 1];
-                const newFastEMA = (parseFloat(candle.close) - prevFastEMA) * fastAlpha + prevFastEMA;
-                ind.emaFast.push(newFastEMA);
+            if (!history || history.length < SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD) {
+                console.log(`Waiting for more historical data for ${symbol}`);
+                return;
             }
 
-            if (ind.emaSlow.length > 0) {
-                const prevSlowEMA = ind.emaSlow[ind.emaSlow.length - 1];
-                const newSlowEMA = (parseFloat(candle.close) - prevSlowEMA) * slowAlpha + prevSlowEMA;
-                ind.emaSlow.push(newSlowEMA);
-            }
+            // Get recent closes for calculations
+            const closes = history.map(candle => parseFloat(candle.close));
+            const volumes = history.map(candle => parseFloat(candle.volume));
 
-            // Update RSI using the full history needed for calculation
-            const rsiValues = RSI.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
-                values: closes
+            // Calculate EMAs
+            const fastPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD;
+            const slowPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD;
+
+            // Calculate new EMAs
+            const newEmaFast = EMA.calculate({
+                period: fastPeriod,
+                values: [...closes, parseFloat(candle.close)]
             });
-            ind.rsi = rsiValues;
+            ind.emaFast = newEmaFast;
+
+            const newEmaSlow = EMA.calculate({
+                period: slowPeriod,
+                values: [...closes, parseFloat(candle.close)]
+            });
+            ind.emaSlow = newEmaSlow;
+
+            // Update RSI
+            const newRSI = RSI.calculate({
+                period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+                values: [...closes, parseFloat(candle.close)]
+            });
+            ind.rsi = newRSI;
 
             // Update Volume MA
-            const volumes = history.slice(-SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD).map(c => parseFloat(c.volume));
-            volumes.push(parseFloat(candle.volume));
-            
-            const volumeMAValues = SMA.calculate({
+            const newVolumeMA = SMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
-                values: volumes
+                values: [...volumes, parseFloat(candle.volume)]
             });
-            ind.volumeMA = volumeMAValues;
+            ind.volumeMA = newVolumeMA;
 
-            // Keep arrays at a reasonable size
-            const maxSize = Math.max(
-                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
-                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
-                SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
-            );
-
-            ind.emaFast = ind.emaFast.slice(-maxSize);
-            ind.emaSlow = ind.emaSlow.slice(-maxSize);
-            ind.rsi = ind.rsi.slice(-maxSize);
-            ind.volumeMA = ind.volumeMA.slice(-maxSize);
-
-            this.processedCandles++;
-            if (this.processedCandles % 100 === 0) {
-                console.log(`🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
-            }
+            // Update last update time
+            ind.lastUpdate = Date.now();
 
             // Check for signals
             await this.checkForSignals(symbol, candle);
         } catch (error) {
-            console.error(`Error processing candle for ${symbol}:`, error);
-            console.error(error.stack);
+            console.error('Error processing candle:', error);
+        }
+    }
+
+    async checkForSignals(symbol, candle) {
+        try {
+            // Initialize indicators if needed
+            if (!this.indicators.has(symbol)) {
+                await this.initializeIndicators(symbol);
+                return; // Wait for next candle after initialization
+            }
+
+            const ind = this.indicators.get(symbol);
+            if (!ind) {
+                console.error(`No indicators available for ${symbol}`);
+                return;
+            }
+
+            // Get current indicator values
+            const rsi = ind.rsi[ind.rsi.length - 1];
+            const emaFast = ind.emaFast[ind.emaFast.length - 1];
+            const emaSlow = ind.emaSlow[ind.emaSlow.length - 1];
+            const volumeMA = ind.volumeMA[ind.volumeMA.length - 1];
+
+            // Skip if we don't have all required values
+            if (typeof rsi !== 'number' || typeof emaFast !== 'number' || 
+                typeof emaSlow !== 'number' || typeof volumeMA !== 'number') {
+                console.log(`Still waiting for indicators to be ready for ${symbol}`);
+                console.log('Current values:', { rsi, emaFast, emaSlow, volumeMA });
+                return;
+            }
+
+            // Calculate volume ratio
+            const currentVolume = parseFloat(candle.volume);
+            const volumeRatio = currentVolume / volumeMA;
+
+            // Determine trend
+            const trend = emaFast > emaSlow ? 'bullish' : 'bearish';
+
+            // Check for buy signal
+            if (trend === 'bullish' && rsi < 30 && volumeRatio > 1.5) {
+                const signal = {
+                    type: 'BUY',
+                    symbol,
+                    price: parseFloat(candle.close),
+                    time: new Date(candle.time).toISOString(),
+                    trend,
+                    rsi,
+                    emaFast,
+                    emaSlow,
+                    volumeMA,
+                    volumeRatio,
+                    action: 'BUY',
+                    reason: '💹 Buy signal triggered:\n• Bullish trend (Fast EMA > Slow EMA)\n• Oversold (RSI < 30)\n• High volume (>1.5x average)'
+                };
+                await this.sendSignal(signal);
+            }
+            // Check for sell signal
+            else if (trend === 'bearish' && rsi > 70 && volumeRatio > 1.5) {
+                const signal = {
+                    type: 'SELL',
+                    symbol,
+                    price: parseFloat(candle.close),
+                    time: new Date(candle.time).toISOString(),
+                    trend,
+                    rsi,
+                    emaFast,
+                    emaSlow,
+                    volumeMA,
+                    volumeRatio,
+                    action: 'SELL',
+                    reason: '📉 Sell signal triggered:\n• Bearish trend (Fast EMA < Slow EMA)\n• Overbought (RSI > 70)\n• High volume (>1.5x average)'
+                };
+                await this.sendSignal(signal);
+            }
+        } catch (error) {
+            console.error('Error checking for signals:', error);
         }
     }
 
@@ -606,114 +656,6 @@ export class SignalsService {
         }
     }
 
-    async checkForSignals(symbol, candle) {
-        try {
-            if (!this.indicators.has(symbol)) {
-                await this.initializeIndicators(symbol);
-            }
-
-            const ind = this.indicators.get(symbol);
-            if (!ind) {
-                console.error(`No indicators available for ${symbol}`);
-                return;
-            }
-
-            // Get the latest indicator values
-            const rsi = ind.rsi[ind.rsi.length - 1];
-            const emaFast = ind.emaFast[ind.emaFast.length - 1];
-            const emaSlow = ind.emaSlow[ind.emaSlow.length - 1];
-            const volumeMA = ind.volumeMA[ind.volumeMA.length - 1];
-
-            const history = this.candleHistory.get(symbol);
-            const closes = history.map(c => parseFloat(c.close));
-            const volumes = history.map(c => parseFloat(c.volume));
-
-            // Calculate indicators
-            const newRSI = RSI.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
-                values: closes
-            });
-            ind.rsi.push(newRSI[newRSI.length - 1]);
-
-            const newVolumeMA = SMA.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
-                values: volumes
-            });
-            ind.volumeMA.push(newVolumeMA[newVolumeMA.length - 1]);
-
-            // Get previous values for crossover detection
-            const prevEmaFast = ind.emaFast[ind.emaFast.length - 2];
-            const prevEmaSlow = ind.emaSlow[ind.emaSlow.length - 2];
-            
-            // Skip if we don't have previous values yet
-            if (!prevEmaFast || !prevEmaSlow) {
-                console.log(`Waiting for previous EMA values for ${symbol}`);
-                return;
-            }
-            
-            // Current values
-            const currentClose = closes[closes.length - 1];
-            const currentVolume = volumes[volumes.length - 1];
-            
-            // Calculate volume ratio
-            const volumeRatio = currentVolume / volumeMA;
-            
-            let signal = null;
-            
-            // BUY Signal Conditions
-            if (
-                prevEmaFast < prevEmaSlow && // Previous state
-                emaFast > emaSlow && // Current crossover
-                rsi < 70 && // Not overbought
-                volumeRatio > 1.5 // Volume confirmation
-            ) {
-                signal = {
-                    type: 'BUY',
-                    symbol,
-                    price: currentClose,
-                    rsi,
-                    emaFast,
-                    emaSlow,
-                    volumeRatio: volumeRatio.toFixed(2),
-                    time: new Date().toISOString()
-                };
-            }
-            // SELL Signal Conditions
-            else if (
-                prevEmaFast > prevEmaSlow && // Previous state
-                emaFast < emaSlow && // Current crossover
-                rsi > 30 && // Not oversold
-                volumeRatio > 1.5 // Volume confirmation
-            ) {
-                signal = {
-                    type: 'SELL',
-                    symbol,
-                    price: currentClose,
-                    rsi,
-                    emaFast,
-                    emaSlow,
-                    volumeRatio: volumeRatio.toFixed(2),
-                    time: new Date().toISOString()
-                };
-            }
-
-            if (signal) {
-                const lastSignal = this.lastSignals.get(symbol);
-                // Check 1-hour cooldown and maximum concurrent trades
-                if (!lastSignal || Date.now() - lastSignal.time > 3600000) {
-                    this.lastSignals.set(symbol, { 
-                        type: signal.type, 
-                        time: Date.now(),
-                        price: currentClose
-                    });
-                    await this.sendSignal(signal);
-                }
-            }
-        } catch (error) {
-            console.error('Error checking for signals:', error);
-        }
-    }
-
     async sendSignal(signal) {
         try {
             // Format the signal message
@@ -759,32 +701,76 @@ export class SignalsService {
     }
 
     formatSignalMessage(signal) {
-        const marketTrend = signal.trend === 'bullish' ? '📈 Bullish' : '📉 Bearish';
-        
-        return `
-🚨 <b>Trading Signal Alert</b> 🚨
+        try {
+            if (!signal || typeof signal !== 'object') {
+                throw new Error('Invalid signal object');
+            }
 
-🔸 <b>Symbol:</b> ${signal.symbol}
-🔸 <b>Price:</b> $${signal.price.toFixed(4)}
-🔸 <b>Time:</b> ${new Date().toLocaleString()}
+            const {
+                symbol = 'Unknown',
+                price = 0,
+                trend = 'unknown',
+                rsi = 0,
+                emaFast = 0,
+                emaSlow = 0,
+                volumeMA = 0,
+                volumeRatio = 0,
+                type = 'Unknown',
+                action = 'Unknown',
+                reason = 'No reason provided'
+            } = signal;
 
-📈 <b>Market Analysis:</b>
+            // Calculate targets and stop loss
+            const stopLoss = type === 'BUY' ? price * 0.99 : price * 1.01;
+            const target1 = type === 'BUY' ? price * 1.005 : price * 0.995;
+            const target2 = type === 'BUY' ? price * 1.01 : price * 0.99;
+            const target3 = type === 'BUY' ? price * 1.02 : price * 0.98;
+
+            // Calculate risk/reward ratio
+            const risk = Math.abs(price - stopLoss);
+            const reward = Math.abs(target2 - price);
+            const riskRewardRatio = (reward / risk).toFixed(2);
+
+            // Determine market trend and MACD trend
+            const marketTrend = trend === 'bullish' ? '📈 BULLISH' : '📉 BEARISH';
+            const macdTrend = emaFast > emaSlow ? 'Bullish' : 'Bearish';
+            const emaStatus = emaFast > emaSlow ? 'Above' : 'Below';
+            const smaStatus = price > volumeMA ? 'Above' : 'Below';
+
+            return `
+🟢 SIGNAL ALERT: ${type} ${symbol}
+
+💰 Entry Zone: ${price.toFixed(4)} - ${(price * 1.002).toFixed(4)}
+🛑 Stop Loss: ${stopLoss.toFixed(4)}
+
+🎯 Targets:
+1️⃣ ${target1.toFixed(4)}
+2️⃣ ${target2.toFixed(4)}
+3️⃣ ${target3.toFixed(4)}
+
+📊 Risk/Reward Ratio: 1:${riskRewardRatio}
+
+📈 Market Analysis:
 • Trend: ${marketTrend}
-• RSI: ${signal.rsi.toFixed(2)}
-• Volume Ratio: ${signal.volumeRatio}x
+• RSI: ${rsi.toFixed(2)}
+• Volume Ratio: ${volumeRatio.toFixed(2)}x
 
-⚡️ <b>Technical Indicators:</b>
-• Fast EMA: ${signal.emaFast.toFixed(4)}
-• Slow EMA: ${signal.emaSlow.toFixed(4)}
-• Volume MA: ${signal.volumeMA.toFixed(2)}
+⚡️ Technical Indicators:
+• MACD: ${macdTrend}
+• EMA: Price ${emaStatus} EMA
+• SMA: Price ${smaStatus} SMA
 
-💡 <b>Signal Type:</b> ${signal.type}
-🎯 <b>Action:</b> ${signal.action.toUpperCase()}
+🔄 Trade on HTX:
+${SIGNALS_CONFIG.REFERRAL_LINK}
+• Up to 20% fee discount
+• $5000 sign-up bonus
+• Zero maker fees
 
-${signal.reason}
-
-🔗 <a href="${SIGNALS_CONFIG.REFERRAL_LINK}">Trade on HTX</a>
-`;
+#${symbol.replace('/', '')} #CryptoSignals #TradingSignals`;
+        } catch (error) {
+            console.error('Error formatting signal message:', error);
+            return 'Error formatting signal message';
+        }
     }
 
     handleWebSocketConnection(ws) {

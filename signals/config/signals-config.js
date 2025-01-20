@@ -6,30 +6,30 @@ const SIGNALS_CONFIG = {
     
     // Trading pairs to monitor
     TRADING_PAIRS: [
-        'BTC/USDT',
-        'HBAR/USDT',
-        'TON/USDT',
-        'ALGO/USDT',
-        'GRT/USDT',
-        'CHZ/USDT',
-        'VET/USDT',
-        'SAND/USDT',  
-        'ZIL/USDT',
-        'IOTA/USDT',  
-        'GALA/USDT',
-        'ZRX/USDT',
-        'ENJ/USDT',
-        'AUDIO/USDT',
-        'FLOW/USDT',
-        'MASK/USDT',
-        'ANKR/USDT',
-        'ARB/USDT',
-        'KAVA/USDT',
-        'ONE/USDT',
-        'CFX/USDT',
-        'SKL/USDT',
-        'SUI/USDT',
-        'UNI/USDT'
+        'BTC/USDT',    // Standard
+        'HT/USDT',     // HBAR is HT on HTX
+        'TON/USDT',    // Standard
+        'ALGO/USDT',   // Standard
+        'GRT/USDT',    // Standard
+        'CHZ/USDT',    // Standard
+        'VET/USDT',    // Standard
+        'MANA/USDT',   // Standard
+        'ZIL/USDT',    // Standard
+        'IOTX/USDT',   // IOTA is IOTX on HTX
+        'GALA/USDT',   // Standard
+        'ZRX/USDT',    // Standard
+        'ENJ/USDT',    // Standard
+        'AUDIO/USDT',  // Standard
+        'FLOW/USDT',   // Standard
+        'MASK/USDT',   // Standard
+        'ANKR/USDT',   // Standard
+        'ARB/USDT',    // Standard
+        'KAVA/USDT',   // Standard
+        'ONE/USDT',    // Standard
+        'CFX/USDT',    // Standard
+        'SKL/USDT',    // Standard
+        'SUI/USDT',    // Standard
+        'UNI/USDT'     // Standard
     ],
 
     // Technical Analysis Parameters
