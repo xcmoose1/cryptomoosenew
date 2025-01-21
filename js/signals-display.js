@@ -7,49 +7,104 @@ export class SignalsDisplay {
         
         this.signals = [];
         this.systemMessages = [];
+        this.signalsContainer = null; // Will be set in init()
+        this.ws = null;
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
+        this.reconnectDelay = 5000;
+    }
+
+    init() {
+        console.log('SignalsDisplay: Initializing...');
         this.signalsContainer = document.getElementById('signals-container');
+        if (!this.signalsContainer) {
+            console.error('SignalsDisplay: Could not find signals container!');
+            return;
+        }
         this.setupWebSocket();
+        console.log('SignalsDisplay: Initialization complete');
     }
 
     setupWebSocket() {
+        if (this.ws) {
+            console.log('SignalsDisplay: WebSocket already exists, closing...');
+            this.ws.close();
+        }
+
         // Use secure WebSocket if the page is served over HTTPS
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
         
+        console.log(`SignalsDisplay: Connecting to WebSocket at ${wsUrl}`);
         this.ws = new WebSocket(wsUrl);
         
+        this.ws.onopen = () => {
+            console.log('SignalsDisplay: WebSocket connected');
+            this.reconnectAttempts = 0;
+            // Add initial connection message
+            this.handleSystemMessage({
+                message: '🔌 Connected to signal service',
+                timestamp: Date.now(),
+                status: 'connected'
+            });
+        };
+        
         this.ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'system') {
-                this.handleSystemMessage(data.data);
-            } else if (data.type === 'signal') {
-                this.handleSignal(data.data);
+            console.log('SignalsDisplay: Received message:', event.data);
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'system') {
+                    this.handleSystemMessage(data.data);
+                } else if (data.type === 'signal') {
+                    this.handleSignal(data.data);
+                }
+            } catch (error) {
+                console.error('SignalsDisplay: Error parsing message:', error);
             }
         };
         
         this.ws.onclose = () => {
-            console.log('WebSocket connection closed, attempting to reconnect...');
-            setTimeout(() => this.setupWebSocket(), 5000);
+            console.log('SignalsDisplay: WebSocket connection closed');
+            this.handleSystemMessage({
+                message: '🔌 Disconnected from signal service',
+                timestamp: Date.now(),
+                status: 'disconnected'
+            });
+            
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                this.reconnectAttempts++;
+                console.log(`SignalsDisplay: Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+                setTimeout(() => this.setupWebSocket(), this.reconnectDelay);
+            } else {
+                console.error('SignalsDisplay: Max reconnection attempts reached');
+            }
         };
         
         this.ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
+            console.error('SignalsDisplay: WebSocket error:', error);
         };
     }
 
     handleSystemMessage(message) {
+        console.log('SignalsDisplay: Handling system message:', message);
         this.systemMessages.push(message);
         this.updateDisplay();
     }
 
     handleSignal(signal) {
+        console.log('SignalsDisplay: Handling signal:', signal);
         this.signals.push(signal);
         this.updateDisplay();
     }
 
     updateDisplay() {
-        if (!this.signalsContainer) return;
+        if (!this.signalsContainer) {
+            console.error('SignalsDisplay: No signals container found!');
+            return;
+        }
 
+        console.log('SignalsDisplay: Updating display');
+        
         // Clear the container
         this.signalsContainer.innerHTML = '';
 

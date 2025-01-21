@@ -1018,6 +1018,11 @@
 
     <script type="module">
         import { signalsDisplay } from './js/signals-display.js';
+        // Initialize signals display when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Initializing signals display...');
+            signalsDisplay.init();
+        });
     </script>
 </body>
 </html>
