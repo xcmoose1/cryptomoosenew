@@ -3,6 +3,7 @@ const SIGNALS_CONFIG = {
     // HTX WebSocket and REST API endpoints
     WS_URL: 'wss://api.huobi.pro/ws',
     REST_URL: 'https://api.huobi.pro',
+    API_BASE_URL: 'https://api.huobi.pro/market',
     
     // Trading pairs to monitor
     TRADING_PAIRS: [

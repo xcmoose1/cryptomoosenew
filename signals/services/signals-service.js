@@ -110,10 +110,18 @@ export class SignalsService {
             // Ensure we don't exceed API limits
             const maxLimit = Math.min(limit, 1000); // HTX API limit
             
-            const response = await fetch(`${SIGNALS_CONFIG.API_BASE_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1min&size=${maxLimit}`);
+            // Format the symbol properly for the API
+            const formattedSymbol = this.formatSymbol(symbol);
+            
+            const response = await fetch(`${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${maxLimit}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             
-            if (data['status'] === 'ok' && Array.isArray(data.data)) {
+            if (data.status === 'ok' && Array.isArray(data.data)) {
                 // Sort candles from oldest to newest
                 const candles = data.data.reverse().map(candle => ({
                     time: candle.id * 1000, // Convert to milliseconds
