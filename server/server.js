@@ -205,8 +205,29 @@ initializeServices().then(signalsService => {
     const wss = new WebSocketServer({ server });
 
     wss.on('connection', (ws) => {
-        console.log('WebSocket client connected');
+        console.log('New WebSocket client connected');
+        
+        // Add the client to the signals service
         signalsService.handleWebSocketConnection(ws);
+        
+        // Send initial system message
+        ws.send(JSON.stringify({
+            type: 'system',
+            data: {
+                message: '🚀 Signal Bot Started - Actively searching for trading signals...',
+                timestamp: Date.now(),
+                status: 'active'
+            }
+        }));
+
+        ws.on('error', (error) => {
+            console.error('WebSocket error:', error);
+        });
+
+        ws.on('close', () => {
+            console.log('Client disconnected');
+            signalsService.handleWebSocketDisconnection(ws);
+        });
     });
 
     // Start the server
