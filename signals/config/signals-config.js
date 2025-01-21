@@ -137,4 +137,3 @@ if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL_ID) {
 }
 
 export { SIGNALS_CONFIG };
-export { SIGNALS_CONFIG };
