@@ -1,9 +1,8 @@
 // Signals System Configuration
 const SIGNALS_CONFIG = {
     // HTX WebSocket and REST API endpoints
-    WS_URL: 'wss://api.huobi.pro/ws',
-    REST_URL: 'https://api.huobi.pro',
-    API_BASE_URL: 'https://api.huobi.pro/market',
+    WS_URL: 'wss://api.htx.com/ws',
+    REST_URL: 'https://api.htx.com',
     
     // Trading pairs to monitor
     TRADING_PAIRS: [
@@ -97,7 +96,7 @@ const SIGNALS_CONFIG = {
 
 // HTX WebSocket Configuration
 const HTX_CONFIG = {
-    wsEndpoint: 'wss://api.huobi.pro/ws',  
+    wsEndpoint: 'wss://api.htx.com/ws',  
     pairs: ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'],
     timeframes: ['1min', '5min', '15min'],
     maxSignals: 20
@@ -137,4 +136,5 @@ if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL_ID) {
     console.error('Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHANNEL_ID in your .env file');
 }
 
+export { SIGNALS_CONFIG };
 export { SIGNALS_CONFIG };

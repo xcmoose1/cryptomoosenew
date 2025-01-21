@@ -199,41 +199,26 @@ app.get('/healthz', (req, res) => {
 
 // Initialize services and start server
 const PORT = process.env.PORT || 3000;
+const WS_PORT = process.env.WS_PORT || 10000;
 
 initializeServices().then(signalsService => {
-    // Create WebSocket server attached to the main HTTP server
-    const wss = new WebSocketServer({ server });
+    // Create a separate server for WebSocket
+    const wsServer = http.createServer();
+    const wss = new WebSocketServer({ server: wsServer });
 
     wss.on('connection', (ws) => {
-        console.log('New WebSocket client connected');
-        
-        // Add the client to the signals service
+        console.log('WebSocket client connected');
         signalsService.handleWebSocketConnection(ws);
-        
-        // Send initial system message
-        ws.send(JSON.stringify({
-            type: 'system',
-            data: {
-                message: '🚀 Signal Bot Started - Actively searching for trading signals...',
-                timestamp: Date.now(),
-                status: 'active'
-            }
-        }));
-
-        ws.on('error', (error) => {
-            console.error('WebSocket error:', error);
-        });
-
-        ws.on('close', () => {
-            console.log('Client disconnected');
-            signalsService.handleWebSocketDisconnection(ws);
-        });
     });
 
-    // Start the server
+    // Start main HTTP server
     server.listen(PORT, () => {
-        console.log(`Server running on port ${PORT}`);
-        console.log(`WebSocket Server available at ws://[your-render-url]:${PORT}`);
+        console.log(`HTTP Server running on port ${PORT}`);
+    });
+
+    // Start WebSocket server
+    wsServer.listen(WS_PORT, () => {
+        console.log(`WebSocket Server running on port ${WS_PORT}`);
     });
 }).catch(error => {
     console.error('Error initializing services:', error);
@@ -244,8 +229,11 @@ initializeServices().then(signalsService => {
 process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
     server.close(() => {
-        console.log('Server closed');
-        process.exit(0);
+        console.log('HTTP Server closed');
+        wsServer.close(() => {
+            console.log('WebSocket Server closed');
+            process.exit(0);
+        });
     });
 });
 

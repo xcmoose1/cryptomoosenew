@@ -7,7 +7,7 @@ export class SignalsDisplay {
         
         this.signals = [];
         this.systemMessages = [];
-        this.signalsContainer = null; // Will be set in init()
+        this.signalsContainer = null;
         this.ws = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;

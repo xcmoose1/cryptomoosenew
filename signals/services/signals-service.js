@@ -33,16 +33,7 @@ export class SignalsService {
     async initializeService() {
         try {
             // Initialize TelegramService
-            try {
-                console.log('Initializing Telegram service...');
-                this.telegramService = createTelegramService();
-                // Test the connection
-                await this.telegramService.sendMessage('🚀 Signal Bot Started - Actively searching for trading signals...');
-                console.log('✅ Telegram service initialized successfully');
-            } catch (error) {
-                console.error('❌ Failed to initialize Telegram service:', error);
-                throw error; // Re-throw to prevent service from starting with broken Telegram
-            }
+            this.telegramService = createTelegramService();
             
             // Start status updates
             this.startStatusUpdates();
@@ -81,23 +72,7 @@ export class SignalsService {
             this.isInitialized = true;
             console.log('\n🚀 SignalsService initialized successfully\n');
             
-            // Send initial status to WebSocket clients
-            const initMessage = {
-                type: 'system',
-                data: {
-                    message: '🚀 Signal Bot Started - Actively searching for trading signals...',
-                    timestamp: Date.now(),
-                    status: 'active'
-                }
-            };
-            
-            this.clients.forEach(client => {
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify(initMessage));
-                }
-            });
-            
-            // Print initial status update
+            // Send initial status update
             this.printSystemStatus();
             
             return true;
@@ -135,18 +110,10 @@ export class SignalsService {
             // Ensure we don't exceed API limits
             const maxLimit = Math.min(limit, 1000); // HTX API limit
             
-            // Format the symbol properly for the API
-            const formattedSymbol = this.formatSymbol(symbol);
-            
-            const response = await fetch(`${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${maxLimit}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
+            const response = await fetch(`${SIGNALS_CONFIG.API_BASE_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1min&size=${maxLimit}`);
             const data = await response.json();
             
-            if (data.status === 'ok' && Array.isArray(data.data)) {
+            if (data['status'] === 'ok' && Array.isArray(data.data)) {
                 // Sort candles from oldest to newest
                 const candles = data.data.reverse().map(candle => ({
                     time: candle.id * 1000, // Convert to milliseconds
@@ -517,19 +484,8 @@ export class SignalsService {
         // Wait for connection to be established
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                console.log('WebSocket connection attempt timed out, retrying...');
-                this.ws.close();
-                if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                    this.reconnectAttempts++;
-                    setTimeout(() => {
-                        this.setupWebSocket()
-                            .then(resolve)
-                            .catch(reject);
-                    }, this.reconnectDelay);
-                } else {
-                    reject(new Error('WebSocket connection timeout after multiple attempts'));
-                }
-            }, 30000); // 30 second timeout
+                reject(new Error('WebSocket connection timeout'));
+            }, 10000); // 10 second timeout
 
             this.ws.on('open', () => {
                 console.log('WebSocket connected to HTX');
@@ -697,48 +653,26 @@ export class SignalsService {
 
     async sendSignal(signal) {
         try {
-            console.log(`\n📡 Sending signal for ${signal.symbol}...`);
-            
             // Format the signal message
             const message = this.formatSignalMessage(signal);
             
             // Send to Telegram if service is available
             if (this.telegramService) {
-                try {
-                    await this.telegramService.sendMessage(message);
-                    console.log(`✅ Signal sent to Telegram for ${signal.symbol}`);
-                } catch (error) {
-                    console.error(`❌ Failed to send signal to Telegram for ${signal.symbol}:`, error);
-                    // Try to reinitialize Telegram service
-                    try {
-                        console.log('Attempting to reinitialize Telegram service...');
-                        this.telegramService = createTelegramService();
-                        await this.telegramService.sendMessage(message);
-                        console.log('✅ Telegram service reinitialized and signal sent successfully');
-                    } catch (reinitError) {
-                        console.error('❌ Failed to reinitialize Telegram service:', reinitError);
-                    }
-                }
+                await this.telegramService.sendMessage(message);
             } else {
-                console.error('❌ Telegram service not available');
+                console.log('Telegram service not available, printing signal locally:');
+                console.log(message);
             }
 
             // Broadcast to WebSocket clients
-            let connectedClients = 0;
             this.clients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
-                    try {
-                        client.send(JSON.stringify({
-                            type: 'signal',
-                            data: signal
-                        }));
-                        connectedClients++;
-                    } catch (error) {
-                        console.error('Error sending signal to WebSocket client:', error);
-                    }
+                    client.send(JSON.stringify({
+                        type: 'signal',
+                        data: signal
+                    }));
                 }
             });
-            console.log(`📡 Signal broadcast to ${connectedClients} WebSocket clients`);
 
             // Store the signal
             if (!this.lastSignals.has(signal.symbol)) {
@@ -755,12 +689,30 @@ export class SignalsService {
                 signals.shift();
             }
 
-            console.log(`✅ Signal processed successfully for ${signal.symbol}`);
-            return true;
+            console.log(`✅ Signal sent for ${signal.symbol}`);
         } catch (error) {
-            console.error(`❌ Error processing signal for ${signal.symbol}:`, error);
-            return false;
+            console.error('Error sending signal:', error);
         }
+    }
+
+    handleWebSocketConnection(ws) {
+        console.log('Client connected to WebSocket');
+        this.clients.add(ws);
+        
+        ws.on('close', () => {
+            console.log('Client disconnected from WebSocket');
+            this.clients.delete(ws);
+        });
+
+        // Send connection message
+        ws.send(JSON.stringify({
+            type: 'system',
+            data: {
+                message: '🔌 Connected to signal service',
+                timestamp: Date.now(),
+                status: 'connected'
+            }
+        }));
     }
 
     formatSignalMessage(signal) {
@@ -834,55 +786,6 @@ ${SIGNALS_CONFIG.REFERRAL_LINK}
             console.error('Error formatting signal message:', error);
             return 'Error formatting signal message';
         }
-    }
-
-    handleWebSocketConnection(ws) {
-        console.log('New WebSocket client connected');
-        
-        // Add to clients set
-        this.clients.add(ws);
-
-        // Setup ping-pong
-        ws.isAlive = true;
-        ws.on('pong', () => {
-            ws.isAlive = true;
-        });
-
-        // Handle client messages
-        ws.on('message', async (data) => {
-            try {
-                const message = JSON.parse(data);
-                console.log('Received message from client:', message);
-                // Handle client messages if needed
-            } catch (error) {
-                console.error('Error handling client message:', error);
-            }
-        });
-
-        // Handle client disconnect
-        ws.on('close', () => {
-            console.log('WebSocket client disconnected');
-            this.clients.delete(ws);
-        });
-
-        // Send initial connection success message
-        ws.send(JSON.stringify({
-            type: 'connection',
-            status: 'connected',
-            timestamp: Date.now()
-        }));
-
-        // Set up ping interval for this connection
-        const pingInterval = setInterval(() => {
-            if (!ws.isAlive) {
-                console.log('Terminating inactive client connection');
-                clearInterval(pingInterval);
-                ws.terminate();
-                return;
-            }
-            ws.isAlive = false;
-            ws.ping();
-        }, 30000);
     }
 }
 
