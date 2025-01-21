@@ -33,7 +33,16 @@ export class SignalsService {
     async initializeService() {
         try {
             // Initialize TelegramService
-            this.telegramService = createTelegramService();
+            try {
+                console.log('Initializing Telegram service...');
+                this.telegramService = createTelegramService();
+                // Test the connection
+                await this.telegramService.sendMessage('🚀 Signal Service Started - Ready to send trading signals!');
+                console.log('✅ Telegram service initialized successfully');
+            } catch (error) {
+                console.error('❌ Failed to initialize Telegram service:', error);
+                throw error; // Re-throw to prevent service from starting with broken Telegram
+            }
             
             // Start status updates
             this.startStatusUpdates();
@@ -672,26 +681,48 @@ export class SignalsService {
 
     async sendSignal(signal) {
         try {
+            console.log(`\n📡 Sending signal for ${signal.symbol}...`);
+            
             // Format the signal message
             const message = this.formatSignalMessage(signal);
             
             // Send to Telegram if service is available
             if (this.telegramService) {
-                await this.telegramService.sendMessage(message);
+                try {
+                    await this.telegramService.sendMessage(message);
+                    console.log(`✅ Signal sent to Telegram for ${signal.symbol}`);
+                } catch (error) {
+                    console.error(`❌ Failed to send signal to Telegram for ${signal.symbol}:`, error);
+                    // Try to reinitialize Telegram service
+                    try {
+                        console.log('Attempting to reinitialize Telegram service...');
+                        this.telegramService = createTelegramService();
+                        await this.telegramService.sendMessage(message);
+                        console.log('✅ Telegram service reinitialized and signal sent successfully');
+                    } catch (reinitError) {
+                        console.error('❌ Failed to reinitialize Telegram service:', reinitError);
+                    }
+                }
             } else {
-                console.log('Telegram service not available, printing signal locally:');
-                console.log(message);
+                console.error('❌ Telegram service not available');
             }
 
             // Broadcast to WebSocket clients
+            let connectedClients = 0;
             this.clients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
-                    client.send(JSON.stringify({
-                        type: 'signal',
-                        data: signal
-                    }));
+                    try {
+                        client.send(JSON.stringify({
+                            type: 'signal',
+                            data: signal
+                        }));
+                        connectedClients++;
+                    } catch (error) {
+                        console.error('Error sending signal to WebSocket client:', error);
+                    }
                 }
             });
+            console.log(`📡 Signal broadcast to ${connectedClients} WebSocket clients`);
 
             // Store the signal
             if (!this.lastSignals.has(signal.symbol)) {
@@ -708,9 +739,11 @@ export class SignalsService {
                 signals.shift();
             }
 
-            console.log(`✅ Signal sent for ${signal.symbol}`);
+            console.log(`✅ Signal processed successfully for ${signal.symbol}`);
+            return true;
         } catch (error) {
-            console.error('Error sending signal:', error);
+            console.error(`❌ Error processing signal for ${signal.symbol}:`, error);
+            return false;
         }
     }
 
