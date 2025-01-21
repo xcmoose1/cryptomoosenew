@@ -13,6 +13,9 @@ class TelegramService {
         // Initialize bot with polling disabled (we don't need to receive messages)
         this.bot = new TelegramBot(this.botToken, { polling: false });
         
+        // HTX referral link
+        this.HTX_REFERRAL = 'https://www.htx.com/en-us/invite/en-us/1f?invite_code=2bgu2223';
+        
         console.log('TelegramService initialized with:');
         console.log('- Bot Token:', this.botToken);
         console.log('- Bot Token Length:', this.botToken.length);
@@ -20,9 +23,9 @@ class TelegramService {
     }
 
     calculateRiskReward(entry, stopLoss, target) {
-        const risk = entry - stopLoss;
-        const reward = target - entry;
-        return { risk, reward, ratio: reward / risk };
+        const risk = Math.abs(((entry - stopLoss) / entry) * 100);
+        const reward = Math.abs(((target - entry) / entry) * 100);
+        return { risk, reward, ratio: (reward / risk).toFixed(2) };
     }
 
     async sendMessage(message) {
@@ -53,35 +56,31 @@ class TelegramService {
         const trendEmoji = marketTrend === 'BULLISH' ? '📈' : marketTrend === 'BEARISH' ? '📉' : '📊';
         
         const signal = `
-${emoji} <b>SIGNAL ALERT: ${type} ${pair}</b> ${timeframe ? `(${timeframe})` : ''}
+${emoji} <b>CRYPTO SIGNAL: ${type} ${pair}</b>
+${timeframe ? `⏱️ Timeframe: ${timeframe}\n` : ''}
+${trendEmoji} Market Trend: ${marketTrend}
 
-💰 <b>Entry Zone:</b> ${price}
-🛑 <b>Stop Loss:</b> ${stopLoss}
-    • Risk: ${risk.toFixed(2)}%
-    • Position Size Recommendation: 1-2% of portfolio
-
-🎯 <b>Targets:</b>
+💰 <b>ENTRY:</b> ${price}
+🛑 <b>STOP:</b> ${stopLoss} (${risk.toFixed(2)}% risk)
+🎯 <b>TARGETS:</b>
 ${targets.map((t, i) => `   ${i + 1}. ${t}`).join('\n')}
 
-📈 <b>Risk/Reward Ratio:</b> 1:${ratio.toFixed(2)}
-⚡️ <b>Signal Confidence:</b> ${confidence}
-${trendEmoji} <b>Market Trend:</b> ${marketTrend}
-💎 <b>24h Volume:</b> $${volume24h}M
+📊 <b>METRICS:</b>
+• R/R Ratio: 1:${ratio}
+• Confidence: ${confidence}
+• 24h Vol: $${volume24h}M
 
-⚠️ <b>Risk Management Tips:</b>
-• Use the recommended position size
-• Consider scaling in/out of positions
-• Move stop loss to break-even after first target
-• Don't chase entry if price moves too far
+⚠️ <b>RISK MANAGEMENT:</b>
+• Position Size: 1-2% max
+• Use SL & TP orders
+• Move SL to BE after 1st target
 
-🔗 <b>Trade on HTX:</b>
+🔗 <b>TRADE NOW:</b>
 ${this.HTX_REFERRAL}
-• Up to 60% fee discount
-• $10,000 welcome bonus
-• Best liquidity & lowest fees
+• 60% fee discount
+• $10K bonus
 
-⚠️ <i>This is not financial advice. DYOR and trade responsibly.</i>
-#${pair.replace('/', '')} #CryptoSignals #TradingSignals
+#${pair.replace('/', '')} #Crypto #Trading
 `;
         
         return this.sendMessage(signal);
