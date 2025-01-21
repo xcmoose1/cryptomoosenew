@@ -1,15 +1,16 @@
 // @ts-check
 
 // Historical Patterns Module
-import { htxWebSocket } from '/js/websocket/htx-websocket.js';
-import { HTX_CONFIG } from '/js/config/htx-config.js';
+import { HISTORICAL_PATTERNS_CONFIG } from './config/historical-patterns-config.js';
+import { createChart } from '../../node_modules/lightweight-charts/dist/lightweight-charts.standalone.production.mjs';
 
 class HistoricalPatternsSection {
     constructor() {
         this.initialized = false;
-        this.currentPattern = 'cyclical';
+        this.currentPattern = HISTORICAL_PATTERNS_CONFIG.PATTERNS.CYCLICAL;
         this.currentTimeframe = '1y';
         this.charts = {};
+        this.data = [];
     }
 
     async init() {
@@ -17,20 +18,15 @@ class HistoricalPatternsSection {
         
         try {
             await this.setupEventListeners();
-            await this.setupWebSocket();
             await this.initializeCharts();
             await this.updateAllData();
             this.startPeriodicUpdates();
             this.initialized = true;
+            console.log('Historical Patterns section initialized successfully');
         } catch (error) {
             console.error('Failed to initialize historical patterns:', error);
             throw error;
         }
-    }
-
-    async setupWebSocket() {
-        await htxWebSocket.init();
-        // Add WebSocket setup logic here
     }
 
     setupEventListeners() {
@@ -42,32 +38,45 @@ class HistoricalPatternsSection {
             });
         }
 
-        // Timeframe selector
-        const timeframeSelect = document.getElementById('patternTimeframe');
-        if (timeframeSelect) {
-            timeframeSelect.addEventListener('change', (e) => {
-                this.handleTimeframeChange(e.target.value);
+        // Timeframe buttons
+        document.querySelectorAll('.timeframe-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.timeframe-btn').forEach(btn => 
+                    btn.classList.remove('active'));
+                button.classList.add('active');
+                this.handleTimeframeChange(button.dataset.timeframe);
             });
-        }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            Object.values(this.charts).forEach(chart => {
+                const container = chart.container;
+                if (container) {
+                    chart.resize(container.clientWidth, 
+                        HISTORICAL_PATTERNS_CONFIG.CHART.DEFAULT_HEIGHT);
+                }
+            });
+        });
     }
 
-    async initializeCharts() {
+    initializeCharts() {
         const chartContainers = ['patternChart', 'comparisonChart'];
         
         for (const containerId of chartContainers) {
             const container = document.getElementById(containerId);
             if (!container) continue;
 
-            this.charts[containerId] = LightweightCharts.createChart(container, {
+            this.charts[containerId] = createChart(container, {
                 width: container.clientWidth,
-                height: 400,
+                height: HISTORICAL_PATTERNS_CONFIG.CHART.DEFAULT_HEIGHT,
                 layout: {
-                    background: { color: 'transparent' },
-                    textColor: '#d1d4dc',
+                    background: { color: HISTORICAL_PATTERNS_CONFIG.CHART.COLORS.BACKGROUND },
+                    textColor: HISTORICAL_PATTERNS_CONFIG.CHART.COLORS.TEXT,
                 },
                 grid: {
-                    vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
-                    horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
+                    vertLines: { color: HISTORICAL_PATTERNS_CONFIG.CHART.COLORS.GRID },
+                    horzLines: { color: HISTORICAL_PATTERNS_CONFIG.CHART.COLORS.GRID },
                 },
             });
         }
@@ -87,15 +96,24 @@ class HistoricalPatternsSection {
     }
 
     startPeriodicUpdates() {
-        setInterval(() => this.updateAllData(), 5 * 60 * 1000);
+        setInterval(() => this.updateAllData(), 
+            HISTORICAL_PATTERNS_CONFIG.UPDATE_INTERVAL);
     }
 
     async handlePatternChange(pattern) {
+        if (!Object.values(HISTORICAL_PATTERNS_CONFIG.PATTERNS).includes(pattern)) {
+            console.error('Invalid pattern type:', pattern);
+            return;
+        }
         this.currentPattern = pattern;
         await this.updateAllData();
     }
 
     async handleTimeframeChange(timeframe) {
+        if (!HISTORICAL_PATTERNS_CONFIG.TIMEFRAMES[timeframe]) {
+            console.error('Invalid timeframe:', timeframe);
+            return;
+        }
         this.currentTimeframe = timeframe;
         await this.updateAllData();
     }
@@ -103,6 +121,9 @@ class HistoricalPatternsSection {
     async updatePatternAnalysis() {
         try {
             const data = await this.fetchPatternData();
+            if (!this.validateData(data)) {
+                throw new Error('Invalid pattern data received');
+            }
             
             // Update strength indicator
             const strengthIndicator = document.getElementById('strengthIndicator');
@@ -111,10 +132,8 @@ class HistoricalPatternsSection {
             }
 
             // Update confidence and accuracy
-            document.getElementById('confidenceLevel').textContent = 
-                this.formatPercentage(data.confidence);
-            document.getElementById('historicalAccuracy').textContent = 
-                this.formatPercentage(data.accuracy);
+            this.updateMetric('confidenceLevel', data.confidence);
+            this.updateMetric('historicalAccuracy', data.accuracy);
 
             // Update pattern chart
             this.updateChart('patternChart', data.chartData);
@@ -127,11 +146,14 @@ class HistoricalPatternsSection {
     async updateCorrelations() {
         try {
             const correlations = await this.fetchCorrelations();
+            if (!this.validateCorrelations(correlations)) {
+                throw new Error('Invalid correlation data received');
+            }
             
-            document.getElementById('patternRecognition').textContent = correlations.pattern;
-            document.getElementById('statisticalAnalysis').textContent = correlations.statistics;
-            document.getElementById('cyclePosition').textContent = correlations.cycle;
-            document.getElementById('volatilityAnalysis').textContent = correlations.volatility;
+            this.updateMetric('patternRecognition', correlations.pattern);
+            this.updateMetric('statisticalAnalysis', correlations.statistics);
+            this.updateMetric('cyclePosition', correlations.cycle);
+            this.updateMetric('volatilityAnalysis', correlations.volatility);
         } catch (error) {
             console.error('Error updating correlations:', error);
             this.showError('correlations');
@@ -141,6 +163,9 @@ class HistoricalPatternsSection {
     async updatePredictions() {
         try {
             const predictions = await this.fetchPredictions();
+            if (!this.validatePredictions(predictions)) {
+                throw new Error('Invalid prediction data received');
+            }
             
             // Update prediction chart
             this.updateChart('predictionChart', predictions.chartData);
@@ -155,7 +180,14 @@ class HistoricalPatternsSection {
         }
     }
 
-    // Helper methods for updating UI components
+    // Helper methods
+    updateMetric(elementId, value) {
+        const element = document.getElementById(elementId);
+        if (element) {
+            element.textContent = value;
+        }
+    }
+
     updatePredictionCard(id, data) {
         const card = document.getElementById(id);
         if (!card) return;
@@ -174,60 +206,50 @@ class HistoricalPatternsSection {
     }
 
     updateChart(chartId, data) {
-        if (!this.charts[chartId]) {
-            this.charts[chartId] = this.createChart(chartId, data);
-        } else {
-            this.charts[chartId].update(data);
+        const chart = this.charts[chartId];
+        if (!chart || !data) return;
+
+        // Clear existing series
+        chart.removeSeries();
+
+        // Add new series based on data type
+        if (data.type === 'candlestick') {
+            const series = chart.addCandlestickSeries({
+                upColor: HISTORICAL_PATTERNS_CONFIG.CHART.COLORS.UP,
+                downColor: HISTORICAL_PATTERNS_CONFIG.CHART.COLORS.DOWN,
+            });
+            series.setData(data.candles);
+        } else if (data.type === 'line') {
+            const series = chart.addLineSeries({
+                color: HISTORICAL_PATTERNS_CONFIG.CHART.COLORS.PATTERN,
+            });
+            series.setData(data.points);
         }
     }
 
-    createChart(chartId, data) {
-        const container = document.getElementById(chartId);
-        if (!container) return null;
-
-        return LightweightCharts.createChart(container, {
-            width: container.clientWidth,
-            height: 400,
-            layout: {
-                background: { color: 'transparent' },
-                textColor: '#d1d4dc',
-            },
-            grid: {
-                vertLines: { color: 'rgba(42, 46, 57, 0.5)' },
-                horzLines: { color: 'rgba(42, 46, 57, 0.5)' },
-            },
-        });
+    // Data validation methods
+    validateData(data) {
+        return data && 
+               typeof data.strength === 'number' &&
+               typeof data.confidence === 'number' &&
+               typeof data.accuracy === 'number' &&
+               data.chartData;
     }
 
-    // Data fetching methods - implement these based on your API
-    async fetchPatternData() {
-        // Implement API call for pattern data
-        return {
-            strength: 0,
-            confidence: 0,
-            accuracy: 0,
-            chartData: {}
-        };
+    validateCorrelations(correlations) {
+        return correlations &&
+               typeof correlations.pattern === 'string' &&
+               typeof correlations.statistics === 'string' &&
+               typeof correlations.cycle === 'string' &&
+               typeof correlations.volatility === 'string';
     }
 
-    async fetchCorrelations() {
-        // Implement API call for correlations
-        return {
-            pattern: '',
-            statistics: '',
-            cycle: '',
-            volatility: ''
-        };
-    }
-
-    async fetchPredictions() {
-        // Implement API call for predictions
-        return {
-            shortTerm: { price: 0, change: 0 },
-            mediumTerm: { price: 0, change: 0 },
-            longTerm: { price: 0, change: 0 },
-            chartData: {}
-        };
+    validatePredictions(predictions) {
+        return predictions &&
+               predictions.shortTerm &&
+               predictions.mediumTerm &&
+               predictions.longTerm &&
+               predictions.chartData;
     }
 
     // Formatting methods
@@ -259,14 +281,16 @@ class HistoricalPatternsSection {
         const elements = document.querySelectorAll(`.${section} .loading`);
         elements.forEach(el => {
             el.textContent = errorMessages[section];
+            el.classList.add('error');
         });
     }
 }
 
 // Create and export singleton instance
-export const historicalPatterns = new HistoricalPatternsSection();
+const historicalPatterns = new HistoricalPatternsSection();
+export { historicalPatterns };
 
-// Initialize the section when the script loads
-document.addEventListener('DOMContentLoaded', () => {
-    historicalPatterns.init();
-});
+// Export init function for section loader
+export function init() {
+    return historicalPatterns.init();
+}

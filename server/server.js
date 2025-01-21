@@ -199,26 +199,20 @@ app.get('/healthz', (req, res) => {
 
 // Initialize services and start server
 const PORT = process.env.PORT || 3000;
-const WS_PORT = process.env.WS_PORT || 10000;
 
 initializeServices().then(signalsService => {
-    // Create a separate server for WebSocket
-    const wsServer = http.createServer();
-    const wss = new WebSocketServer({ server: wsServer });
+    // Create WebSocket server attached to the main HTTP server
+    const wss = new WebSocketServer({ server });
 
     wss.on('connection', (ws) => {
         console.log('WebSocket client connected');
         signalsService.handleWebSocketConnection(ws);
     });
 
-    // Start main HTTP server
+    // Start the server
     server.listen(PORT, () => {
-        console.log(`HTTP Server running on port ${PORT}`);
-    });
-
-    // Start WebSocket server
-    wsServer.listen(WS_PORT, () => {
-        console.log(`WebSocket Server running on port ${WS_PORT}`);
+        console.log(`Server running on port ${PORT}`);
+        console.log(`WebSocket Server available at ws://[your-render-url]:${PORT}`);
     });
 }).catch(error => {
     console.error('Error initializing services:', error);
@@ -229,11 +223,8 @@ initializeServices().then(signalsService => {
 process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
     server.close(() => {
-        console.log('HTTP Server closed');
-        wsServer.close(() => {
-            console.log('WebSocket Server closed');
-            process.exit(0);
-        });
+        console.log('Server closed');
+        process.exit(0);
     });
 });
 

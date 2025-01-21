@@ -84,14 +84,15 @@ export class SignalsService {
 
     formatSymbol(symbol) {
         // Convert BTC/USDT to btcusdt format for HTX API
+        // Also handle special cases for HTX
         const formatted = symbol.replace('/', '').toLowerCase();
         
-        // Special cases mapping for HTX spot pairs
+        // Special cases mapping for HTX
         const specialCases = {
-            'hbarusdt': 'htusdt'     // HBAR is listed as HT
+            'manausdt': 'sandusdt',  // MANA is listed as SAND on HTX
+            'oneusdtt': 'oneusdt'    // Fix ONE symbol
         };
 
-        // Check if we have a special case mapping
         return specialCases[formatted] || formatted;
     }
 
@@ -104,19 +105,13 @@ export class SignalsService {
 
     async fetchHistoricalData(symbol, limit = 500) {
         try {
-            const formattedSymbol = this.formatSymbol(symbol);
-            console.log(`\n📊 Fetching ${limit} historical candles for ${symbol} (${formattedSymbol})...`);
+            console.log(`\n📊 Fetching ${limit} historical candles for ${symbol}...`);
             
             // Ensure we don't exceed API limits
             const maxLimit = Math.min(limit, 1000); // HTX API limit
             
-            const url = `${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${maxLimit}`;
-            console.log(`API URL: ${url}`);
-            
-            const response = await fetch(url);
+            const response = await fetch(`${SIGNALS_CONFIG.API_BASE_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1min&size=${maxLimit}`);
             const data = await response.json();
-            
-            console.log(`API Response for ${formattedSymbol}:`, data);
             
             if (data['status'] === 'ok' && Array.isArray(data.data)) {
                 // Sort candles from oldest to newest
