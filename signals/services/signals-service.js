@@ -484,8 +484,19 @@ export class SignalsService {
         // Wait for connection to be established
         await new Promise((resolve, reject) => {
             const timeout = setTimeout(() => {
-                reject(new Error('WebSocket connection timeout'));
-            }, 10000); // 10 second timeout
+                console.log('WebSocket connection attempt timed out, retrying...');
+                this.ws.close();
+                if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                    this.reconnectAttempts++;
+                    setTimeout(() => {
+                        this.setupWebSocket()
+                            .then(resolve)
+                            .catch(reject);
+                    }, this.reconnectDelay);
+                } else {
+                    reject(new Error('WebSocket connection timeout after multiple attempts'));
+                }
+            }, 30000); // 30 second timeout
 
             this.ws.on('open', () => {
                 console.log('WebSocket connected to HTX');

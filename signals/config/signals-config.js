@@ -1,7 +1,7 @@
 // Signals System Configuration
 const SIGNALS_CONFIG = {
     // HTX WebSocket and REST API endpoints
-    WS_URL: 'wss://api.htx.com/ws',
+    WS_URL: 'wss://api-aws.htx.com/ws',
     REST_URL: 'https://api.htx.com',
     
     // Trading pairs to monitor
@@ -96,7 +96,7 @@ const SIGNALS_CONFIG = {
 
 // HTX WebSocket Configuration
 const HTX_CONFIG = {
-    wsEndpoint: 'wss://api.htx.com/ws',  
+    wsEndpoint: 'wss://api-aws.htx.com/ws',  
     pairs: ['BTC-USDT', 'ETH-USDT', 'SOL-USDT'],
     timeframes: ['1min', '5min', '15min'],
     maxSignals: 20
