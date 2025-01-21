@@ -1,0 +1,119 @@
+#signals-container {
+    padding: 20px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.system-message {
+    background: rgba(0, 0, 0, 0.7);
+    border-left: 4px solid #00ff88;
+    margin-bottom: 15px;
+    padding: 15px;
+    border-radius: 4px;
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+.message-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.message-text {
+    color: #00ff88;
+    font-weight: 500;
+}
+
+.message-time {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.signal-card {
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 8px;
+    margin-bottom: 20px;
+    padding: 15px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.5s ease-in-out;
+}
+
+.signal-card.long {
+    border-left: 4px solid #00ff88;
+}
+
+.signal-card.short {
+    border-left: 4px solid #ff4444;
+}
+
+.signal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.signal-pair {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #fff;
+}
+
+.signal-type {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.signal-card.long .signal-type {
+    background: rgba(0, 255, 136, 0.2);
+    color: #00ff88;
+}
+
+.signal-card.short .signal-type {
+    background: rgba(255, 68, 68, 0.2);
+    color: #ff4444;
+}
+
+.signal-time {
+    color: #666;
+    font-size: 0.9em;
+}
+
+.signal-body {
+    color: #fff;
+}
+
+.signal-price, .signal-stop {
+    margin-bottom: 10px;
+}
+
+.signal-targets {
+    margin-top: 15px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}

@@ -37,7 +37,7 @@ export class SignalsService {
                 console.log('Initializing Telegram service...');
                 this.telegramService = createTelegramService();
                 // Test the connection
-                await this.telegramService.sendMessage('🚀 Signal Service Started - Ready to send trading signals!');
+                await this.telegramService.sendMessage('🚀 Signal Bot Started - Actively searching for trading signals...');
                 console.log('✅ Telegram service initialized successfully');
             } catch (error) {
                 console.error('❌ Failed to initialize Telegram service:', error);
@@ -81,7 +81,23 @@ export class SignalsService {
             this.isInitialized = true;
             console.log('\n🚀 SignalsService initialized successfully\n');
             
-            // Send initial status update
+            // Send initial status to WebSocket clients
+            const initMessage = {
+                type: 'system',
+                data: {
+                    message: '🚀 Signal Bot Started - Actively searching for trading signals...',
+                    timestamp: Date.now(),
+                    status: 'active'
+                }
+            };
+            
+            this.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify(initMessage));
+                }
+            });
+            
+            // Print initial status update
             this.printSystemStatus();
             
             return true;

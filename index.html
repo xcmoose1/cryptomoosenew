@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <link rel="stylesheet" href="css/signals.css">
     <style>
         :root {
             --color-bg: #0a0b0c;
@@ -888,6 +889,8 @@
         </div>
     </section>
 
+    <div id="signals-container"></div>
+
     <section class="disclaimer-section">
         <div class="disclaimer-content">
             <h4>Risk Disclaimer</h4>
@@ -1011,6 +1014,10 @@
             button.textContent = 'Copied!';
             setTimeout(() => button.textContent = originalText, 2000);
         }
+    </script>
+
+    <script type="module">
+        import { signalsDisplay } from './js/signals-display.js';
     </script>
 </body>
 </html>
