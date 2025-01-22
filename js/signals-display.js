@@ -39,7 +39,7 @@ export class SignalsDisplay {
 
         // Use secure WebSocket if the page is served over HTTPS
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.hostname}:${window.location.port}/signals`;
+        const wsUrl = `${protocol}//${window.location.hostname}:10000`;
         
         console.log(`SignalsDisplay: Connecting to WebSocket at ${wsUrl}`);
         this.ws = new WebSocket(wsUrl);
