@@ -7,7 +7,7 @@ export class SignalsDisplay {
         
         this.signals = [];
         this.systemMessages = [];
-        this.signalsContainer = null;
+        this.pairPrices = new Map();
         this.ws = null;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
@@ -16,11 +16,17 @@ export class SignalsDisplay {
 
     init() {
         console.log('SignalsDisplay: Initializing...');
-        this.signalsContainer = document.getElementById('signals-container');
-        if (!this.signalsContainer) {
-            console.error('SignalsDisplay: Could not find signals container!');
+        this.signalsGrid = document.querySelector('.signals-grid');
+        this.pairList = document.querySelector('.pair-list');
+        this.connectionStatus = document.querySelector('.connection-status');
+        this.statusIndicator = document.querySelector('.status-indicator');
+        this.statusText = this.connectionStatus.querySelector('span');
+        
+        if (!this.signalsGrid || !this.pairList) {
+            console.error('SignalsDisplay: Could not find required elements!');
             return;
         }
+        
         this.setupWebSocket();
         console.log('SignalsDisplay: Initialization complete');
     }
@@ -33,7 +39,7 @@ export class SignalsDisplay {
 
         // Use secure WebSocket if the page is served over HTTPS
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        const wsUrl = `${protocol}//${window.location.hostname}:10000`;
         
         console.log(`SignalsDisplay: Connecting to WebSocket at ${wsUrl}`);
         this.ws = new WebSocket(wsUrl);
@@ -41,20 +47,16 @@ export class SignalsDisplay {
         this.ws.onopen = () => {
             console.log('SignalsDisplay: WebSocket connected');
             this.reconnectAttempts = 0;
-            // Add initial connection message
-            this.handleSystemMessage({
-                message: '🔌 Connected to signal service',
-                timestamp: Date.now(),
-                status: 'connected'
-            });
+            this.updateConnectionStatus(true);
+            this.ws.send(JSON.stringify({ type: 'subscribe', data: { channel: 'signals' } }));
         };
         
         this.ws.onmessage = (event) => {
             console.log('SignalsDisplay: Received message:', event.data);
             try {
                 const data = JSON.parse(event.data);
-                if (data.type === 'system') {
-                    this.handleSystemMessage(data.data);
+                if (data.type === 'price_update') {
+                    this.updatePairPrice(data.pair, data.price, data.change);
                 } else if (data.type === 'signal') {
                     this.handleSignal(data.data);
                 }
@@ -65,11 +67,7 @@ export class SignalsDisplay {
         
         this.ws.onclose = () => {
             console.log('SignalsDisplay: WebSocket connection closed');
-            this.handleSystemMessage({
-                message: '🔌 Disconnected from signal service',
-                timestamp: Date.now(),
-                status: 'disconnected'
-            });
+            this.updateConnectionStatus(false);
             
             if (this.reconnectAttempts < this.maxReconnectAttempts) {
                 this.reconnectAttempts++;
@@ -82,65 +80,51 @@ export class SignalsDisplay {
         
         this.ws.onerror = (error) => {
             console.error('SignalsDisplay: WebSocket error:', error);
+            this.updateConnectionStatus(false);
         };
     }
 
-    handleSystemMessage(message) {
-        console.log('SignalsDisplay: Handling system message:', message);
-        this.systemMessages.push(message);
-        this.updateDisplay();
+    updateConnectionStatus(connected) {
+        if (this.statusIndicator && this.statusText) {
+            this.statusIndicator.classList.toggle('connected', connected);
+            this.statusText.textContent = connected ? 'Connected' : 'Connecting...';
+        }
+    }
+
+    updatePairPrice(pair, price, change) {
+        const pairItem = this.pairList.querySelector(`[data-pair="${pair}"]`);
+        if (pairItem) {
+            const priceElement = pairItem.querySelector('.pair-price');
+            if (priceElement) {
+                priceElement.textContent = price;
+                priceElement.className = 'pair-price ' + (change > 0 ? 'price-up' : change < 0 ? 'price-down' : 'price-unchanged');
+            }
+        }
     }
 
     handleSignal(signal) {
         console.log('SignalsDisplay: Handling signal:', signal);
-        this.signals.push(signal);
-        this.updateDisplay();
+        this.signals.unshift(signal); // Add new signals to the beginning
+        if (this.signals.length > 50) {
+            this.signals.pop(); // Keep only the latest 50 signals
+        }
+        this.updateSignalsDisplay();
     }
 
-    updateDisplay() {
-        if (!this.signalsContainer) {
-            console.error('SignalsDisplay: No signals container found!');
-            return;
-        }
-
-        console.log('SignalsDisplay: Updating display');
+    updateSignalsDisplay() {
+        if (!this.signalsGrid) return;
         
-        // Clear the container
-        this.signalsContainer.innerHTML = '';
-
-        // Display system messages first
-        this.systemMessages.forEach(msg => {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'system-message';
-            messageDiv.innerHTML = `
-                <div class="message-content">
-                    <span class="message-text">${msg.message}</span>
-                    <span class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+        this.signalsGrid.innerHTML = this.signals.map(signal => `
+            <div class="signal-card">
+                <div class="signal-type ${signal.type.toLowerCase()}">${signal.type}</div>
+                <div class="signal-pair">${signal.pair}</div>
+                <div class="signal-price">${signal.price}</div>
+                <div class="signal-time">
+                    <i class="far fa-clock"></i>
+                    ${new Date(signal.timestamp).toLocaleString()}
                 </div>
-            `;
-            this.signalsContainer.appendChild(messageDiv);
-        });
-
-        // Display signals
-        this.signals.forEach(signal => {
-            const signalDiv = document.createElement('div');
-            signalDiv.className = `signal-card ${signal.type.toLowerCase()}`;
-            signalDiv.innerHTML = `
-                <div class="signal-header">
-                    <span class="signal-pair">${signal.pair}</span>
-                    <span class="signal-type">${signal.type}</span>
-                    <span class="signal-time">${new Date(signal.timestamp).toLocaleTimeString()}</span>
-                </div>
-                <div class="signal-body">
-                    <div class="signal-price">Entry: ${signal.price}</div>
-                    <div class="signal-stop">Stop: ${signal.stopLoss}</div>
-                    <div class="signal-targets">
-                        ${signal.targets.map((t, i) => `<div>Target ${i + 1}: ${t}</div>`).join('')}
-                    </div>
-                </div>
-            `;
-            this.signalsContainer.appendChild(signalDiv);
-        });
+            </div>
+        `).join('');
     }
 }
 

@@ -613,41 +613,47 @@ export class SignalsService {
                 }
             }
 
-            // Handle ping messages
+            // Handle ping-pong
             if (message.ping) {
                 this.ws.send(JSON.stringify({ pong: message.ping }));
                 return;
             }
 
-            // Process market data
+            // Handle market data
             if (message.ch && message.tick) {
-                const symbol = this.deformatSymbol(message.ch.split('.')[1]);
-                const candle = {
-                    time: message.tick.id * 1000, // Convert to milliseconds
-                    open: message.tick.open,
-                    high: message.tick.high,
-                    low: message.tick.low,
-                    close: message.tick.close,
-                    volume: message.tick.vol
-                };
-
-                this.updateCandleHistory(symbol, candle);
-                this.processedCandles++;
+                const channel = message.ch;
+                const [, symbol, type] = channel.split('.');
                 
-                // Log processing status every 100 candles
-                if (this.processedCandles % 100 === 0) {
-                    console.log(`\n🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
-                }
+                if (type === 'kline') {
+                    const candle = {
+                        time: message.tick.id * 1000,
+                        open: message.tick.open,
+                        high: message.tick.high,
+                        low: message.tick.low,
+                        close: message.tick.close,
+                        volume: message.tick.vol
+                    };
 
-                if (this.isInitialized) {
+                    // Broadcast price update to all clients
+                    const formattedSymbol = this.deformatSymbol(symbol);
+                    const priceUpdate = {
+                        type: 'price_update',
+                        pair: formattedSymbol,
+                        price: candle.close.toFixed(4),
+                        change: ((candle.close - candle.open) / candle.open) * 100
+                    };
+
+                    for (const client of this.clients) {
+                        if (client.readyState === 1) { // WebSocket.OPEN
+                            client.send(JSON.stringify(priceUpdate));
+                        }
+                    }
+
                     await this.processCandle(symbol, candle);
                 }
             }
         } catch (error) {
             console.error('Error handling WebSocket message:', error);
-            if (error.message.includes('pako')) {
-                console.error('Data decompression error. Raw data:', data);
-            }
         }
     }
 
