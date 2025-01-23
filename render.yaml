@@ -15,3 +15,22 @@ services:
         value: production
       - key: PORT
         value: 10000
+      - key: MEMESHOOT_WORKER_URL
+        value: ${MEMESHOOT_WORKER_URL}
+
+  - type: worker
+    name: memeshoot-worker
+    env: node
+    buildCommand: npm install
+    startCommand: node server/memeshoot-server.js
+    runtime: node
+    nodeVersion: 18.x
+    rootDir: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10001
+      - key: MAIN_SERVER_URL
+        value: ${MAIN_SERVER_URL}

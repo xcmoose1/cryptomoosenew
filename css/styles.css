@@ -612,3 +612,148 @@ section {
         height: 350px;
     }
 }
+
+/* Token Feed Styles */
+.token-feed-section {
+    background: rgba(20, 20, 20, 0.7);
+    border-radius: 15px;
+    padding: 20px;
+    margin: 20px 0;
+    backdrop-filter: blur(10px);
+}
+
+.feed-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.feed-header h2 {
+    color: #fff;
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.feed-filters {
+    display: flex;
+    gap: 10px;
+}
+
+.filter-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 20px;
+    padding: 8px 15px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.filter-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.filter-btn.active {
+    background: linear-gradient(45deg, #ff6b6b, #ff8e53);
+}
+
+.token-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.token-alert {
+    background: rgba(30, 30, 30, 0.8);
+    border-radius: 10px;
+    padding: 15px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 15px;
+    align-items: center;
+    transition: transform 0.3s ease;
+}
+
+.token-alert:hover {
+    transform: translateX(5px);
+    background: rgba(40, 40, 40, 0.8);
+}
+
+.alert-type {
+    font-size: 24px;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+}
+
+.alert-content {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.token-name {
+    font-weight: bold;
+    color: #fff;
+}
+
+.alert-details {
+    color: #aaa;
+    font-size: 0.9em;
+}
+
+.alert-time {
+    color: #666;
+    font-size: 0.8em;
+}
+
+.alert-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.action-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 5px;
+    padding: 5px 10px;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* Custom scrollbar for token feed */
+.token-feed::-webkit-scrollbar {
+    width: 8px;
+}
+
+.token-feed::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+.token-feed::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.token-feed::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Alert type indicators */
+.alert-type.pump { background: linear-gradient(45deg, #ff6b6b, #ff8e53); }
+.alert-type.whale { background: linear-gradient(45deg, #4facfe, #00f2fe); }
+.alert-type.social { background: linear-gradient(45deg, #43e97b, #38f9d7); }

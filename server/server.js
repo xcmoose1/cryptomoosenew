@@ -14,6 +14,7 @@ if (!process.env.OPENAI_API_KEY) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Check for required Telegram variables
 if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHANNEL_ID) {
     console.error('Missing required environment variables:');
     console.error('TELEGRAM_BOT_TOKEN:', process.env.TELEGRAM_BOT_TOKEN);
@@ -50,6 +51,11 @@ import { HTXDailyService } from '../services/htx-daily.service.js';
 import signalsRouter from '../signals/routes/signals-routes.js';
 import contentRouter from './routes/content-routes.js';
 import marketOverviewRouter from '../routes/market-overview.js';
+import aiAnalysisRouter from '../routes/ai-analysis.js';
+import MemeMonitorService from '../services/meme-monitor.service.js';
+import WhaleMonitorService from '../services/whale-monitor.service.js';
+import SocialMonitorService from '../services/social-monitor.service.js';
+import AIAnalysisService from '../services/ai-analysis.service.js';
 
 // Rate Limiter implementation
 class RateLimiter {
@@ -105,6 +111,62 @@ class RateLimiter {
 const app = express();
 const server = http.createServer(app);
 
+// Create WebSocket server
+const wss = new WebSocketServer({ server });
+
+// Store WebSocket clients by type
+const wsClients = {
+    signals: new Set(),
+    memeshoot: new Set()
+};
+
+// Handle WebSocket connection
+wss.on('connection', (ws, req) => {
+    // Determine client type from URL
+    const clientType = req.url === '/ws/memeshoot' ? 'memeshoot' : 'signals';
+    wsClients[clientType].add(ws);
+    console.log(`${clientType} client connected, total clients:`, wsClients[clientType].size);
+
+    // Send initial status for MemeShoot clients
+    if (clientType === 'memeshoot') {
+        ws.send(JSON.stringify({
+            type: 'status',
+            monitor: 'priceMonitor',
+            message: 'Monitoring price movements...'
+        }));
+    }
+
+    // Handle client disconnection
+    ws.on('close', () => {
+        wsClients[clientType].delete(ws);
+        console.log(`${clientType} client disconnected, remaining clients:`, wsClients[clientType].size);
+    });
+});
+
+// Broadcast to specific client type
+function broadcast(clientType, message) {
+    wsClients[clientType].forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(message));
+        }
+    });
+}
+
+// Export broadcast function for other modules
+export function broadcastMemeShootAlert(alert) {
+    broadcast('memeshoot', {
+        type: 'alert',
+        alert
+    });
+}
+
+export function broadcastSignal(signal) {
+    broadcast('signals', {
+        type: 'signal',
+        signal
+    });
+}
+
 // Initialize services
 async function initializeServices() {
     console.log('Initializing services...');
@@ -157,9 +219,73 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/signals', signalsRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/market-overview', marketOverviewRouter);
+app.use('/api/ai-analysis', aiAnalysisRouter);
+
+// MemeShoot API endpoints
+app.post('/api/memeshoot/analyze', async (req, res) => {
+    try {
+        const { tokenAddress, chain } = req.body;
+        
+        if (!tokenAddress || !chain) {
+            return res.status(400).json({ error: 'Token address and chain are required' });
+        }
+
+        // Initialize services if needed
+        const memeMonitorService = new MemeMonitorService();
+        const whaleMonitorService = new WhaleMonitorService();
+        const socialMonitorService = new SocialMonitorService();
+        const aiAnalysisService = new AIAnalysisService();
+
+        // Get token info
+        const tokenInfo = await memeMonitorService.getTokenInfo(tokenAddress, chain);
+        
+        // Get price data
+        const priceData = await memeMonitorService.getPriceData(tokenAddress, chain);
+        
+        // Get holder data
+        const holderData = await whaleMonitorService.getHolderData(tokenAddress, chain);
+        
+        // Get social sentiment
+        const socialData = await socialMonitorService.getSocialSentiment(tokenAddress, chain);
+        
+        // Get AI analysis
+        const aiAnalysis = await aiAnalysisService.analyzeToken({
+            tokenInfo,
+            priceData,
+            holderData,
+            socialData
+        });
+
+        // Compute scores
+        const moonScore = aiAnalysis.pumpPotential * 100;
+        const riskScore = (1 - aiAnalysis.riskLevel) * 100;
+        const fomoScore = aiAnalysis.fomoLevel * 100;
+
+        res.json({
+            tokenInfo,
+            priceData,
+            holderData,
+            socialData,
+            aiAnalysis,
+            scores: {
+                moon: moonScore,
+                risk: riskScore,
+                fomo: fomoScore
+            }
+        });
+
+    } catch (error) {
+        console.error('Error analyzing token:', error);
+        res.status(500).json({ error: 'Error analyzing token' });
+    }
+});
 
 // Create a separate instance for daily updates
 const htxDailyService = new HTXDailyService();
+
+// Initialize MemeMonitor service
+const memeMonitor = new MemeMonitorService();
+console.log('MemeMonitor service initialized');
 
 // Rate limiter middleware
 const rateLimiter = new RateLimiter();
@@ -202,22 +328,13 @@ const PORT = process.env.PORT || 3000;
 const WS_PORT = process.env.WS_PORT || 10000;
 
 initializeServices().then(signalsService => {
-    // Create a separate server for WebSocket
-    const wsServer = http.createServer();
-    const wss = new WebSocketServer({ server: wsServer });
-
-    wss.on('connection', (ws) => {
-        console.log('WebSocket client connected');
-        signalsService.handleWebSocketConnection(ws);
-    });
-
     // Start main HTTP server
     server.listen(PORT, () => {
         console.log(`HTTP Server running on port ${PORT}`);
     });
 
     // Start WebSocket server
-    wsServer.listen(WS_PORT, () => {
+    wss.listen(WS_PORT, () => {
         console.log(`WebSocket Server running on port ${WS_PORT}`);
     });
 }).catch(error => {
@@ -230,7 +347,7 @@ process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
     server.close(() => {
         console.log('HTTP Server closed');
-        wsServer.close(() => {
+        wss.close(() => {
             console.log('WebSocket Server closed');
             process.exit(0);
         });
