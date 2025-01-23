@@ -6,6 +6,7 @@ import PriceMonitorService from './price-monitor.service.js';
 import WhaleMonitorService from './whale-monitor.service.js';
 import SocialMonitorService from './social-monitor.service.js';
 import AIAnalysisService from './ai-analysis.service.js';
+import { RateLimiter } from './rate-limiter.js';
 
 // Export the class
 class MemeMonitorService {
@@ -13,6 +14,9 @@ class MemeMonitorService {
         this.openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY
         });
+        
+        // Initialize rate limiter: 60 requests per hour (conservative limit)
+        this.gptRateLimiter = new RateLimiter(60, 3600000); // 1 hour window
         
         // Use separate Telegram bot for MemeShoot
         this.telegramEnabled = false;
@@ -226,11 +230,41 @@ class MemeMonitorService {
     }
 
     async analyzePumpPotential(token, priceData, volumeData) {
-        return this.aiAnalysis.analyzePumpPotential(token, priceData, volumeData);
+        try {
+            // Check rate limit before making GPT-4 request
+            const canMakeRequest = await this.gptRateLimiter.tryRequest();
+            if (!canMakeRequest) {
+                const waitTime = this.gptRateLimiter.getTimeUntilNextSlot();
+                console.log(`Rate limit reached for GPT-4. Next available slot in ${Math.ceil(waitTime / 1000)} seconds`);
+                return { probability: 0, confidence: 0 };
+            }
+
+            // Proceed with GPT-4 analysis
+            const analysis = await this.aiAnalysis.analyzePumpPotential(token, priceData, volumeData);
+            return analysis;
+        } catch (error) {
+            console.error('Error in pump potential analysis:', error);
+            return { probability: 0, confidence: 0 };
+        }
     }
 
     async analyzeSocialSentiment(data) {
-        return this.aiAnalysis.analyzeSocialSentiment(data);
+        try {
+            // Check rate limit before making GPT-4 request
+            const canMakeRequest = await this.gptRateLimiter.tryRequest();
+            if (!canMakeRequest) {
+                const waitTime = this.gptRateLimiter.getTimeUntilNextSlot();
+                console.log(`Rate limit reached for GPT-4. Next available slot in ${Math.ceil(waitTime / 1000)} seconds`);
+                return { score: 0, confidence: 0 };
+            }
+
+            // Proceed with GPT-4 analysis
+            const sentiment = await this.aiAnalysis.analyzeSocialSentiment(data);
+            return sentiment;
+        } catch (error) {
+            console.error('Error in social sentiment analysis:', error);
+            return { score: 0, confidence: 0 };
+        }
     }
 
     async sendWhaleAlert(token, movements) {
@@ -259,23 +293,22 @@ class MemeMonitorService {
 
     async sendPumpAlert(token, signal) {
         try {
-            const message = `🚀 POTENTIAL PUMP ALERT: ${token.name} ($${token.symbol})\n\nProbability: ${(signal.probability * 100).toFixed(2)}%\nTimeframe: ${signal.timeframe}\n\nReasons:\n${signal.reasons.map(r => `• ${r}`).join('\n')}\n\nCurrent Price: $${signal.currentPrice}\n24h Change: ${signal.priceChange24h}%\nVolume Increase: ${signal.volumeIncrease}x\n\n#${token.symbol} #MemeShoot #PumpAlert`;
-
-            // Only send to Telegram if enabled
-            if (this.telegramEnabled) {
-                await this.telegramBot.sendMessage(this.channelId, message);
+            // Check rate limit before making GPT-4 request for alert message
+            const canMakeRequest = await this.gptRateLimiter.tryRequest();
+            if (!canMakeRequest) {
+                // Use a simple alert format if rate limited
+                const message = `🚨 Potential pump detected for ${token.symbol}!\nProbability: ${(signal.probability * 100).toFixed(2)}%`;
+                if (this.telegramEnabled) {
+                    await this.telegramBot.sendMessage(this.channelId, message);
+                }
+                return;
             }
 
-            // Always send to WebSocket clients
-            this.broadcastAlert({
-                type: 'pump',
-                tokenName: token.name,
-                tokenSymbol: token.symbol,
-                tokenAddress: token.address,
-                chain: token.chain,
-                details: message,
-                time: 'Just now'
-            });
+            // Generate detailed alert with GPT-4
+            const analysis = await this.aiAnalysis.generatePumpAlert(token, signal);
+            if (this.telegramEnabled) {
+                await this.telegramBot.sendMessage(this.channelId, analysis);
+            }
         } catch (error) {
             console.error('Error sending pump alert:', error);
         }
