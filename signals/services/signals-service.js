@@ -83,59 +83,40 @@ export class SignalsService {
     }
 
     formatSymbol(symbol) {
-        // Convert BTC/USDT to btcusdt format for HTX API
-        // Also handle special cases for HTX
-        const formatted = symbol.replace('/', '').toLowerCase();
-        
-        // Special cases mapping for HTX
-        const specialCases = {
-            'manausdt': 'sandusdt',  // MANA is listed as SAND on HTX
-            'oneusdtt': 'oneusdt'    // Fix ONE symbol
-        };
-
-        return specialCases[formatted] || formatted;
+        // Symbol is already in correct format for HTX API
+        return symbol.toLowerCase();
     }
 
     deformatSymbol(symbol) {
-        // Convert btcusdt to BTC/USDT format for internal use
+        // Convert btcusdt to BTC/USDT format for display
         const base = symbol.slice(0, -4).toUpperCase();
-        const quote = symbol.slice(-4).toUpperCase();
-        return `${base}/${quote}`;
+        return `${base}/USDT`;
     }
 
-    async fetchHistoricalData(symbol, limit = 500) {
+    async fetchHistoricalData(symbol, limit = 200) {
         try {
-            console.log(`\n📊 Fetching ${limit} historical candles for ${symbol}...`);
+            const url = `${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1h&size=${limit}`;
+            console.log(`Fetching data from: ${url}`);
             
-            // Ensure we don't exceed API limits
-            const maxLimit = Math.min(limit, 1000); // HTX API limit
-            
-            const response = await fetch(`${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1min&size=${maxLimit}`);
+            const response = await fetch(url);
             const data = await response.json();
-            
-            if (data['status'] === 'ok' && Array.isArray(data.data)) {
-                // Sort candles from oldest to newest
-                const candles = data.data.reverse().map(candle => ({
-                    time: candle.id * 1000, // Convert to milliseconds
-                    open: candle.open,
-                    high: candle.high,
-                    low: candle.low,
-                    close: candle.close,
-                    volume: candle.vol
-                }));
 
-                // Store in history
-                this.candleHistory.set(symbol, candles);
-                
-                console.log(`✅ Fetched ${candles.length} historical candles for ${symbol}`);
-                return candles;
+            if (data.status === 'ok' && data.data && data.data.length > 0) {
+                const processedData = data.data.reverse();
+                this.candleHistory.set(symbol, processedData);
+                console.log(`✅ Successfully fetched ${processedData.length} candles for ${symbol}`);
+                return processedData;
             } else {
-                console.error(`❌ Failed to fetch historical data for ${symbol}:`, data['err-msg'] || 'Unknown error');
-                return null;
+                console.error(`❌ Failed to fetch historical data for ${symbol}:`, data.status);
+                // Initialize with empty array instead of null
+                this.candleHistory.set(symbol, []);
+                return [];
             }
         } catch (error) {
-            console.error(`❌ Error fetching historical data for ${symbol}:`, error);
-            return null;
+            console.error(`❌ Failed to fetch historical data for ${symbol}:`, error);
+            // Initialize with empty array instead of null
+            this.candleHistory.set(symbol, []);
+            return [];
         }
     }
 
@@ -154,7 +135,16 @@ export class SignalsService {
 
             const history = this.candleHistory.get(symbol);
             if (!history || history.length === 0) {
-                throw new Error(`No historical data available for ${symbol}`);
+                console.log(`⚠️ No historical data available for ${symbol}, initializing with default values`);
+                // Initialize with default values instead of throwing error
+                this.indicators.set(symbol, {
+                    emaFast: [],
+                    emaSlow: [],
+                    rsi: [],
+                    volumeMA: [],
+                    lastUpdate: Date.now()
+                });
+                return true;
             }
 
             // Extract close prices and volumes
@@ -165,37 +155,37 @@ export class SignalsService {
             const smaFast = SMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
                 values: closes
-            });
+            }) || [];
 
             const smaSlow = SMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
                 values: closes
-            });
+            }) || [];
 
             // Calculate EMAs using SMA as initial value
             const emaFast = EMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
                 values: closes,
-                initValue: smaFast[0]
-            });
+                initValue: smaFast[0] || closes[0]
+            }) || [];
 
             const emaSlow = EMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
                 values: closes,
-                initValue: smaSlow[0]
-            });
+                initValue: smaSlow[0] || closes[0]
+            }) || [];
 
             // Calculate RSI
             const rsi = RSI.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
                 values: closes
-            });
+            }) || [];
 
             // Calculate Volume MA
             const volumeMA = SMA.calculate({
                 period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
                 values: volumes
-            });
+            }) || [];
 
             // Store indicators
             this.indicators.set(symbol, {
@@ -210,7 +200,15 @@ export class SignalsService {
             return true;
         } catch (error) {
             console.error(`Error initializing indicators for ${symbol}:`, error);
-            return false;
+            // Initialize with empty values on error instead of returning false
+            this.indicators.set(symbol, {
+                emaFast: [],
+                emaSlow: [],
+                rsi: [],
+                volumeMA: [],
+                lastUpdate: Date.now()
+            });
+            return true;
         }
     }
 
