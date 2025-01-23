@@ -7,6 +7,7 @@ import WhaleMonitorService from './whale-monitor.service.js';
 import SocialMonitorService from './social-monitor.service.js';
 import AIAnalysisService from './ai-analysis.service.js';
 import { RateLimiter } from './rate-limiter.js';
+import { formatAlert } from './alert-templates.js';
 
 // Export the class
 class MemeMonitorService {
@@ -267,48 +268,35 @@ class MemeMonitorService {
         }
     }
 
-    async sendWhaleAlert(token, movements) {
+    async sendPumpAlert(token, signal) {
         try {
-            const message = `🐋 WHALE MOVEMENT DETECTED: ${token.name} ($${token.symbol})\n\nTransaction Type: ${movements.type}\nAmount: ${movements.amount} ${token.symbol}\nValue: $${movements.value}\n\nWallet Analysis:\n• Previous Transactions: ${movements.walletStats.previousTrades} previous trades\n• Success Rate: ${movements.walletStats.successRate}%\n• Pattern: ${movements.walletStats.pattern}\n\n#${token.symbol} #MemeShoot #WhaleAlert`;
+            // Format alert using template
+            const alert = formatAlert('PUMP', token, {
+                currentPrice: signal.currentPrice,
+                priceChange24h: signal.priceChange24h,
+                volumeIncrease: signal.volumeIncrease,
+                probability: signal.probability,
+                reasons: signal.reasons || ['Significant price movement detected']
+            });
 
-            // Only send to Telegram if enabled
+            // Send to Telegram if enabled
             if (this.telegramEnabled) {
-                await this.telegramBot.sendMessage(this.channelId, message);
+                await this.telegramBot.sendMessage(
+                    this.channelId, 
+                    `${alert.title}\n\n${alert.message}`
+                );
             }
 
-            // Always send to WebSocket clients
+            // Broadcast to WebSocket clients
             this.broadcastAlert({
-                type: 'whale',
+                type: 'pump',
                 tokenName: token.name,
                 tokenSymbol: token.symbol,
                 tokenAddress: token.address,
                 chain: token.chain,
-                details: message,
-                time: 'Just now'
+                alert: alert,
+                time: new Date().toISOString()
             });
-        } catch (error) {
-            console.error('Error sending whale alert:', error);
-        }
-    }
-
-    async sendPumpAlert(token, signal) {
-        try {
-            // Check rate limit before making GPT-4 request for alert message
-            const canMakeRequest = await this.gptRateLimiter.tryRequest();
-            if (!canMakeRequest) {
-                // Use a simple alert format if rate limited
-                const message = `🚨 Potential pump detected for ${token.symbol}!\nProbability: ${(signal.probability * 100).toFixed(2)}%`;
-                if (this.telegramEnabled) {
-                    await this.telegramBot.sendMessage(this.channelId, message);
-                }
-                return;
-            }
-
-            // Generate detailed alert with GPT-4
-            const analysis = await this.aiAnalysis.generatePumpAlert(token, signal);
-            if (this.telegramEnabled) {
-                await this.telegramBot.sendMessage(this.channelId, analysis);
-            }
         } catch (error) {
             console.error('Error sending pump alert:', error);
         }
@@ -316,25 +304,69 @@ class MemeMonitorService {
 
     async sendSentimentAlert(token, sentiment) {
         try {
-            const message = `📊 SOCIAL SENTIMENT SPIKE: ${token.name} ($${token.symbol})\n\nSentiment Score: ${(sentiment.score * 100).toFixed(2)}%\n\nPlatform Activity:\n• Twitter: ${sentiment.twitter.activity} (${sentiment.twitter.sentiment})\n• Reddit: ${sentiment.reddit.activity} (${sentiment.reddit.sentiment})\n• Telegram: ${sentiment.telegram.activity} (${sentiment.telegram.sentiment})\n\nKey Topics:\n${sentiment.topics.map(t => `• ${t}`).join('\n')}\n\n#${token.symbol} #MemeShoot #SentimentAlert`;
+            // Format alert using template
+            const alert = formatAlert('SENTIMENT', token, {
+                score: sentiment.score,
+                topics: sentiment.topics,
+                twitter: sentiment.twitter,
+                reddit: sentiment.reddit,
+                telegram: sentiment.telegram
+            });
 
-            // Only send to Telegram if enabled
+            // Send to Telegram if enabled
             if (this.telegramEnabled) {
-                await this.telegramBot.sendMessage(this.channelId, message);
+                await this.telegramBot.sendMessage(
+                    this.channelId, 
+                    `${alert.title}\n\n${alert.message}`
+                );
             }
 
-            // Always send to WebSocket clients
+            // Broadcast to WebSocket clients
             this.broadcastAlert({
-                type: 'social',
+                type: 'sentiment',
                 tokenName: token.name,
                 tokenSymbol: token.symbol,
                 tokenAddress: token.address,
                 chain: token.chain,
-                details: message,
-                time: 'Just now'
+                alert: alert,
+                time: new Date().toISOString()
             });
         } catch (error) {
             console.error('Error sending sentiment alert:', error);
+        }
+    }
+
+    async sendWhaleAlert(token, movements) {
+        try {
+            // Format alert using template
+            const alert = formatAlert('WHALE', token, {
+                amount: movements.amount,
+                value: movements.value,
+                type: movements.type,
+                walletAge: movements.walletAge,
+                previousActivity: movements.previousActivity
+            });
+
+            // Send to Telegram if enabled
+            if (this.telegramEnabled) {
+                await this.telegramBot.sendMessage(
+                    this.channelId, 
+                    `${alert.title}\n\n${alert.message}`
+                );
+            }
+
+            // Broadcast to WebSocket clients
+            this.broadcastAlert({
+                type: 'whale',
+                tokenName: token.name,
+                tokenSymbol: token.symbol,
+                tokenAddress: token.address,
+                chain: token.chain,
+                alert: alert,
+                time: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Error sending whale alert:', error);
         }
     }
 
@@ -345,16 +377,11 @@ class MemeMonitorService {
     }
 
     broadcastAlert(alert) {
-        // Send alert to all connected WebSocket clients
-        const message = JSON.stringify({
-            type: 'token_alert',
-            data: alert
-        });
-
+        // Broadcast to all connected WebSocket clients
         if (global.wss) {
             global.wss.clients.forEach(client => {
                 if (client.readyState === WebSocket.OPEN) {
-                    client.send(message);
+                    client.send(JSON.stringify(alert));
                 }
             });
         }
