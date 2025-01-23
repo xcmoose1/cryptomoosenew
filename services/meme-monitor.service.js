@@ -2,10 +2,10 @@
 import WebSocket from 'ws';
 import TelegramBot from 'node-telegram-bot-api';
 import { OpenAI } from 'openai';
-import { PriceMonitorService } from './price-monitor.service.js';
-import { WhaleMonitorService } from './whale-monitor.service.js';
-import { SocialMonitorService } from './social-monitor.service.js';
-import { AIAnalysisService } from './ai-analysis.service.js';
+import PriceMonitorService from './price-monitor.service.js';
+import WhaleMonitorService from './whale-monitor.service.js';
+import SocialMonitorService from './social-monitor.service.js';
+import AIAnalysisService from './ai-analysis.service.js';
 
 // Export the class
 class MemeMonitorService {

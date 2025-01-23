@@ -1,5 +1,5 @@
 // Price monitoring service
-export class PriceMonitorService {
+class PriceMonitorService {
     constructor() {
         this.priceCache = new Map();
         this.volumeCache = new Map();
@@ -38,3 +38,5 @@ export class PriceMonitorService {
         }
     }
 }
+
+export default PriceMonitorService;
