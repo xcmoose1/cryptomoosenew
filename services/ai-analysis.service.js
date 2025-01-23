@@ -147,7 +147,7 @@ class AIAnalysisService {
     async analyzePumpPotential(token, priceData, volumeData) {
         try {
             // Generate cache key
-            const cacheKey = `pump_${token.symbol}_${priceData.price}_${volumeData.volumeChange}`;
+            const cacheKey = `pump_${token.symbol}_${Date.now()}`;
             
             // Check cache first
             const cached = this.getCachedAnalysis(cacheKey);
@@ -158,45 +158,54 @@ class AIAnalysisService {
             // Do traditional analysis first
             const traditionalAnalysis = this.analyzeTraditional(priceData, volumeData);
             
-            // Only use GPT-4 if traditional analysis shows significant potential
-            if (traditionalAnalysis.probability < 0.5) {
+            // If OpenAI is not available or traditional analysis shows low potential, use traditional only
+            if (!this.openai || traditionalAnalysis.probability < 0.5) {
+                console.log('Using traditional analysis for pump potential');
                 return traditionalAnalysis;
             }
 
-            const analysis = await this.openai.chat.completions.create({
-                model: "gpt-4",
-                messages: [{
-                    role: "system",
-                    content: "You are a crypto trading expert analyzing meme token pump potential."
-                }, {
-                    role: "user",
-                    content: `Analyze pump potential for ${token.symbol} with the following data:
-                             Price: ${JSON.stringify(priceData)}
-                             Volume: ${JSON.stringify(volumeData)}
-                             
-                             Respond in this format:
-                             Probability: (number between 0-1)
-                             Timeframe: (expected timeframe)
-                             Reasons:
-                             - (reason 1)
-                             - (reason 2)
-                             ...`
-                }]
-            });
+            try {
+                const analysis = await this.openai.chat.completions.create({
+                    model: "gpt-4",
+                    messages: [{
+                        role: "system",
+                        content: "You are a crypto trading expert analyzing meme token pump potential."
+                    }, {
+                        role: "user",
+                        content: `Analyze pump potential for ${token.symbol} with the following data:
+                                 Price: ${JSON.stringify(priceData)}
+                                 Volume: ${JSON.stringify(volumeData)}
+                                 
+                                 Respond in this format:
+                                 Probability: (number between 0-1)
+                                 Timeframe: (expected timeframe)
+                                 Reasons:
+                                 - (reason 1)
+                                 - (reason 2)
+                                 ...`
+                    }]
+                });
 
-            const result = {
-                probability: this.extractProbability(analysis),
-                timeframe: this.extractTimeframe(analysis),
-                reasons: this.extractReasons(analysis),
-                currentPrice: priceData.price,
-                priceChange24h: priceData.change24h,
-                volumeIncrease: volumeData.volumeChange
-            };
+                const result = {
+                    probability: this.extractProbability(analysis),
+                    timeframe: this.extractTimeframe(analysis),
+                    reasons: this.extractReasons(analysis),
+                    currentPrice: priceData.price,
+                    priceChange24h: priceData.change24h,
+                    volumeIncrease: volumeData.volumeChange
+                };
 
-            // Cache the result
-            this.setCachedAnalysis(cacheKey, result);
-            return result;
-
+                // Cache the result
+                this.setCachedAnalysis(cacheKey, result);
+                return result;
+            } catch (gptError) {
+                // If GPT-4 fails due to billing/rate limit, use traditional analysis
+                if (gptError.status === 429 || gptError.error?.type === 'billing_not_active') {
+                    console.log('GPT-4 unavailable (billing/rate limit). Using traditional analysis.');
+                    return traditionalAnalysis;
+                }
+                throw gptError; // Re-throw other errors
+            }
         } catch (error) {
             console.error('Error analyzing pump potential:', error);
             // Fall back to traditional analysis on error
@@ -218,46 +227,54 @@ class AIAnalysisService {
             // Do traditional analysis first
             const traditionalAnalysis = this.analyzeSocialTraditional(data);
             
-            // Only use GPT-4 if there's significant social activity
-            if (traditionalAnalysis.score < 0.5) {
+            // If OpenAI is not available or low social activity, use traditional only
+            if (!this.openai || traditionalAnalysis.score < 0.5) {
+                console.log('Using traditional analysis for social sentiment');
                 return traditionalAnalysis;
             }
 
-            const analysis = await this.openai.chat.completions.create({
-                model: "gpt-4",
-                messages: [{
-                    role: "system",
-                    content: "You are analyzing social media sentiment for a cryptocurrency."
-                }, {
-                    role: "user",
-                    content: `Analyze social sentiment from multiple platforms:
-                             ${JSON.stringify(data, null, 2)}
-                             
-                             Calculate an overall sentiment score (0-1) and identify key topics.`
-                }]
-            });
+            try {
+                const analysis = await this.openai.chat.completions.create({
+                    model: "gpt-4",
+                    messages: [{
+                        role: "system",
+                        content: "You are analyzing social media sentiment for a cryptocurrency."
+                    }, {
+                        role: "user",
+                        content: `Analyze social sentiment from multiple platforms:
+                                 ${JSON.stringify(data, null, 2)}
+                                 
+                                 Calculate an overall sentiment score (0-1) and identify key topics.`
+                    }]
+                });
 
-            const content = analysis.choices[0].message.content;
-            const scoreMatch = content.match(/score:\s*(0\.\d+|\d+)/i);
-            const topicsMatch = content.match(/topics:([\s\S]*?)(?=\n\n|$)/i);
+                const content = analysis.choices[0].message.content;
+                const scoreMatch = content.match(/score:\s*(0\.\d+|\d+)/i);
+                const topicsMatch = content.match(/topics:([\s\S]*?)(?=\n\n|$)/i);
 
-            const result = {
-                score: scoreMatch ? parseFloat(scoreMatch[1]) : 0.5,
-                topics: topicsMatch ? 
-                    topicsMatch[1].split('\n')
-                        .map(line => line.trim())
-                        .filter(line => line.startsWith('-') || line.startsWith('•'))
-                        .map(line => line.replace(/^[-•]\s*/, ''))
-                    : ['General market interest'],
-                twitter: data.twitter,
-                reddit: data.reddit,
-                telegram: data.telegram
-            };
+                const result = {
+                    score: scoreMatch ? parseFloat(scoreMatch[1]) : 0.5,
+                    topics: topicsMatch ? 
+                        topicsMatch[1].split('\n')
+                            .map(line => line.trim())
+                            .filter(line => line.startsWith('-') || line.startsWith('•'))
+                            .map(line => line.replace(/^[-•]\s*/, ''))
+                        : ['General market interest'],
+                    confidence: 0.8,
+                    timestamp: Date.now()
+                };
 
-            // Cache the result
-            this.setCachedAnalysis(cacheKey, result);
-            return result;
-
+                // Cache the result
+                this.setCachedAnalysis(cacheKey, result);
+                return result;
+            } catch (gptError) {
+                // If GPT-4 fails due to billing/rate limit, use traditional analysis
+                if (gptError.status === 429 || gptError.error?.type === 'billing_not_active') {
+                    console.log('GPT-4 unavailable (billing/rate limit). Using traditional analysis.');
+                    return traditionalAnalysis;
+                }
+                throw gptError; // Re-throw other errors
+            }
         } catch (error) {
             console.error('Error analyzing social sentiment:', error);
             // Fall back to traditional analysis on error
