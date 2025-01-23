@@ -110,7 +110,7 @@ export class SignalsService {
             // Ensure we don't exceed API limits
             const maxLimit = Math.min(limit, 1000); // HTX API limit
             
-            const response = await fetch(`${SIGNALS_CONFIG.API_BASE_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1min&size=${maxLimit}`);
+            const response = await fetch(`${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1min&size=${maxLimit}`);
             const data = await response.json();
             
             if (data['status'] === 'ok' && Array.isArray(data.data)) {

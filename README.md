@@ -58,7 +58,49 @@ CryptoMoose is a comprehensive cryptocurrency market analysis platform that prov
 - Real-time signal notifications via Telegram
 - Signal history and performance tracking
 
-### 6. Social Media Strategy
+### 6. MemeShoot 🎯
+Advanced meme token monitoring and analysis platform with real-time alerts:
+
+#### Key Features
+- **Real-Time Token Monitoring**
+  - Price and volume tracking
+  - Whale transaction detection
+  - Social media sentiment analysis
+  - Trending token discovery
+
+- **AI-Powered Analysis**
+  - Smart pattern recognition
+  - Risk assessment
+  - Trend prediction
+  - Market sentiment analysis
+
+- **Alert System**
+  - Price movement alerts
+  - Whale transaction notifications
+  - Social media trend alerts
+  - Customizable alert thresholds
+
+- **Multi-Chain Support**
+  - Ethereum (ETH)
+  - BNB Chain (BSC)
+  - Base
+  - Solana (SOL)
+
+#### Technical Stack
+- Real-time WebSocket connections
+- AI integration with OpenAI
+- Multi-chain data aggregation
+- Telegram notifications (optional)
+
+#### Environment Variables
+```env
+# MemeShoot Configuration
+MEMESHOOT_TELEGRAM_ENABLED=true/false  # Enable/disable Telegram notifications
+MEMESHOOT_BOT_TOKEN=your_bot_token     # Telegram bot token for MemeShoot alerts
+MEMESHOOT_CHANNEL_ID=your_channel_id   # Telegram channel ID for MemeShoot alerts
+```
+
+### 7. Social Media Strategy
 - Thoughtful market analysis and insights
 - Integration with Buffer for scheduled posting
 - Focus on macro trends and policy impacts
@@ -101,7 +143,7 @@ Our social media presence aims to provide deep, thoughtful analysis that connect
 - Weekly deep dives: Policy and trend analysis
 - Monthly market outlook: Comprehensive analysis
 
-### 7. Market Overview
+### 8. Market Overview
 The Market Overview feature provides a comprehensive daily analysis of the cryptocurrency market using AI-powered insights and real-time data from CoinGecko. It includes:
 
 - Total market capitalization and 24h changes
