@@ -1,5 +1,6 @@
 // Social media monitoring service
-export class SocialMonitorService {
+// Export the class
+class SocialMonitorService {
     constructor() {
         this.sentimentCache = new Map();
     }
@@ -49,3 +50,6 @@ export class SocialMonitorService {
         }
     }
 }
+
+// Export as default
+export default SocialMonitorService;

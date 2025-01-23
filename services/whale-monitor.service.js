@@ -1,5 +1,6 @@
 // Whale monitoring service
-export class WhaleMonitorService {
+// Export the class
+class WhaleMonitorService {
     constructor() {
         this.whaleThreshold = 100000; // $100k USD
         this.whaleCache = new Map();
@@ -32,3 +33,6 @@ export class WhaleMonitorService {
         }
     }
 }
+
+// Export as default
+export default WhaleMonitorService;

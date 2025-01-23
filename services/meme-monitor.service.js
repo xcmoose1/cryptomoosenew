@@ -8,7 +8,7 @@ import { SocialMonitorService } from './social-monitor.service.js';
 import { AIAnalysisService } from './ai-analysis.service.js';
 
 // Export the class
-export class MemeMonitorService {
+class MemeMonitorService {
     constructor() {
         this.openai = new OpenAI({
             apiKey: process.env.OPENAI_API_KEY
@@ -327,3 +327,6 @@ export class MemeMonitorService {
         }
     }
 }
+
+// Export as default
+export default MemeMonitorService;

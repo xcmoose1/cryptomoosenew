@@ -1,5 +1,5 @@
 // AI Analysis Service
-export class AIAnalysisService {
+class AIAnalysisService {
     constructor(openai) {
         this.openai = openai;
     }
@@ -134,3 +134,6 @@ export class AIAnalysisService {
         }
     }
 }
+
+// Export as default
+export default AIAnalysisService;
