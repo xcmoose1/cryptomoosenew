@@ -111,69 +111,60 @@ class RateLimiter {
 const app = express();
 const server = http.createServer(app);
 
-// Create WebSocket server
-const wss = new WebSocketServer({ server });
+// Create WebSocket server attached to HTTP server
+const wss = new WebSocketServer({ 
+    server,
+    path: '/ws/memeshoot'  // Set the specific path
+});
 
-// Store WebSocket clients by type
-const wsClients = {
-    signals: new Set(),
-    memeshoot: new Set()
-};
+// Store WebSocket clients
+const wsClients = new Set();
 
 // Handle WebSocket connection
 wss.on('connection', (ws, req) => {
-    // Determine client type from URL
-    const clientType = req.url === '/ws/memeshoot' ? 'memeshoot' : 'signals';
-    wsClients[clientType].add(ws);
-    console.log(`${clientType} client connected, total clients:`, wsClients[clientType].size);
+    console.log('New client connected');
+    wsClients.add(ws);
 
-    // Send initial status for MemeShoot clients
-    if (clientType === 'memeshoot') {
-        ws.send(JSON.stringify({
-            type: 'status',
-            monitor: 'priceMonitor',
-            message: 'Monitoring price movements...'
-        }));
-    }
+    // Send initial status
+    ws.send(JSON.stringify({
+        type: 'status',
+        monitor: 'priceMonitor',
+        message: 'Monitoring price movements...'
+    }));
+
+    // Handle client messages
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            console.log('Received:', data);
+        } catch (error) {
+            console.error('Error processing message:', error);
+        }
+    });
 
     // Handle client disconnection
     ws.on('close', () => {
-        wsClients[clientType].delete(ws);
-        console.log(`${clientType} client disconnected, remaining clients:`, wsClients[clientType].size);
+        console.log('Client disconnected');
+        wsClients.delete(ws);
+    });
+
+    // Handle errors
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        wsClients.delete(ws);
     });
 });
 
-// Broadcast to specific client type
-function broadcast(clientType, message) {
-    wsClients[clientType].forEach(client => {
+// Broadcast function for other modules
+export function broadcastMemeShootAlert(alert) {
+    wsClients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify(message));
+            client.send(JSON.stringify({
+                type: 'alert',
+                alert
+            }));
         }
     });
-}
-
-// Export broadcast function for other modules
-export function broadcastMemeShootAlert(alert) {
-    broadcast('memeshoot', {
-        type: 'alert',
-        alert
-    });
-}
-
-export function broadcastSignal(signal) {
-    broadcast('signals', {
-        type: 'signal',
-        signal
-    });
-}
-
-// Initialize services
-async function initializeServices() {
-    console.log('Initializing services...');
-    const signalsService = new (await import('../signals/services/signals-service.js')).SignalsService();
-    await signalsService.initialize();
-    await signalsService.initializeService();
-    return signalsService;
 }
 
 // Middleware
@@ -319,38 +310,59 @@ app.get('/daily-digest', (req, res) => {
 });
 
 // Health check endpoint
-app.get('/healthz', (req, res) => {
+app.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy' });
 });
 
-// Initialize services and start server
+// Error handlers
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection:', reason);
+});
+
+// Start the server
 const PORT = process.env.PORT || 3000;
-const WS_PORT = process.env.WS_PORT || 10000;
 
-initializeServices().then(signalsService => {
-    // Start main HTTP server
-    server.listen(PORT, () => {
-        console.log(`HTTP Server running on port ${PORT}`);
-    });
+async function startServer() {
+    try {
+        // Start HTTP server first
+        await new Promise((resolve) => {
+            server.listen(PORT, () => {
+                console.log(`Server is running on port ${PORT}`);
+                resolve();
+            });
+        });
 
-    // Start WebSocket server
-    wss.listen(WS_PORT, () => {
-        console.log(`WebSocket Server running on port ${WS_PORT}`);
-    });
-}).catch(error => {
-    console.error('Error initializing services:', error);
+        // Initialize WebSocket server
+        wss.on('listening', () => {
+            console.log(`WebSocket server is ready and attached to HTTP server on port ${PORT}`);
+        });
+
+        // Initialize services after server is running
+        await initializeServices();
+        console.log('All services initialized successfully');
+        
+    } catch (error) {
+        console.error('Error starting server:', error);
+        process.exit(1);
+    }
+}
+
+// Start the server
+startServer().catch(error => {
+    console.error('Failed to start server:', error);
     process.exit(1);
 });
 
-// Handle server shutdown gracefully
+// Handle graceful shutdown
 process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
     server.close(() => {
-        console.log('HTTP Server closed');
-        wss.close(() => {
-            console.log('WebSocket Server closed');
-            process.exit(0);
-        });
+        console.log('HTTP server closed');
+        process.exit(0);
     });
 });
 
@@ -370,10 +382,11 @@ const timeframeMap = {
     '1M': '1mon'
 };
 
-process.on('uncaughtException', (error) => {
-    console.error('Uncaught Exception:', error);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+// Initialize services
+async function initializeServices() {
+    console.log('Initializing services...');
+    const signalsService = new (await import('../signals/services/signals-service.js')).SignalsService();
+    await signalsService.initialize();
+    await signalsService.initializeService();
+    return signalsService;
+}

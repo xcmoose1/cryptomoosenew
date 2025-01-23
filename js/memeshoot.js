@@ -380,55 +380,98 @@ const tokenFeed = {
     }
 };
 
+// WebSocket connection management
+let ws;
+let wsReconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 5;
+const RECONNECT_DELAY = 5000;
+
+function connectWebSocket() {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.hostname + (window.location.port ? ':' + window.location.port : '');
+    const wsUrl = `${wsProtocol}//${wsHost}/ws/memeshoot`;
+    
+    console.log('Connecting to WebSocket:', wsUrl);
+    ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+        console.log('Connected to MemeShoot WebSocket');
+        wsReconnectAttempts = 0;
+        updateConnectionStatus('connected');
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            console.log('Received WebSocket message:', data);
+            
+            if (data.type === 'alert') {
+                tokenFeed.addAlert(data.alert);
+            } else if (data.type === 'status') {
+                updateMonitoringStatus(data.monitor, data.message);
+            }
+        } catch (error) {
+            console.error('Error processing WebSocket message:', error);
+        }
+    };
+
+    ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        updateConnectionStatus('error');
+    };
+
+    ws.onclose = () => {
+        console.log('WebSocket connection closed');
+        updateConnectionStatus('disconnected');
+        
+        // Attempt to reconnect
+        if (wsReconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+            wsReconnectAttempts++;
+            console.log(`Reconnecting... Attempt ${wsReconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+            setTimeout(connectWebSocket, RECONNECT_DELAY);
+        } else {
+            console.log('Max reconnection attempts reached');
+        }
+    };
+}
+
+function updateConnectionStatus(status) {
+    const statusElement = document.getElementById('connectionStatus');
+    if (!statusElement) return;
+
+    switch (status) {
+        case 'connected':
+            statusElement.textContent = '🟢 Connected';
+            statusElement.className = 'status-connected';
+            break;
+        case 'disconnected':
+            statusElement.textContent = '🔴 Disconnected';
+            statusElement.className = 'status-disconnected';
+            break;
+        case 'error':
+            statusElement.textContent = '⚠️ Connection Error';
+            statusElement.className = 'status-error';
+            break;
+    }
+}
+
+function updateMonitoringStatus(monitor, message) {
+    const statusElement = document.getElementById(`${monitor}Status`);
+    if (statusElement) {
+        statusElement.textContent = message;
+    }
+}
+
 // Initialize MemeShoot
 const memeShoot = new MemeShoot();
 
 // Export for use in other scripts
 window.memeShoot = { ...memeShoot, tokenFeed };
 
-// Connect to WebSocket for real-time alerts
-const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsHost = window.location.host;
-const ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/memeshoot`);
-
-ws.onmessage = (event) => {
-    try {
-        const data = JSON.parse(event.data);
-        
-        if (data.type === 'alert') {
-            tokenFeed.addAlert(data.alert);
-        } else if (data.type === 'status') {
-            // Update monitoring status
-            const statusElement = document.getElementById(`${data.monitor}Status`);
-            if (statusElement) {
-                statusElement.textContent = data.message;
-            }
-        }
-    } catch (error) {
-        console.error('Error processing WebSocket message:', error);
-    }
-};
-
-ws.onopen = () => {
-    console.log('Connected to MemeShoot WebSocket');
-};
-
-ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
-};
-
-ws.onclose = () => {
-    console.log('Disconnected from MemeShoot WebSocket');
-    // Try to reconnect after 5 seconds
-    setTimeout(() => {
-        window.location.reload();
-    }, 5000);
-};
-
-// Initialize event listeners
+// Initialize WebSocket connection when the page loads
 document.addEventListener('DOMContentLoaded', () => {
     tokenFeed.setupFilterButtons();
-    updateMonitoringStatus();
+    connectWebSocket();
 
     // Add event listener for analyze button
     const analyzeBtn = document.getElementById('analyzeBtn');
