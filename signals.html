@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoMoose - Signals</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: #0a0b0c;
+            color: #ffffff;
+            min-height: 100vh;
+        }
+
+        .nav {
+            background: rgba(18, 18, 18, 0.8);
+            backdrop-filter: blur(10px);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 1rem 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-left, .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: #ffffff;
+            gap: 0.5rem;
+        }
+
+        .logo-container img {
+            height: 32px;
+            width: auto;
+        }
+
+        .nav-link {
+            color: var(--color-text);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-link i {
+            font-size: 1rem;
+        }
+
+        .nav-link span {
+            font-size: 0.9rem;
+        }
+
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-telegram {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #0088cc;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 12px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .btn-telegram:hover {
+            background: #0099e6;
+        }
+
+        .btn-telegram i {
+            font-size: 1rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 6rem auto 2rem;
+            padding: 0 2rem;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+        }
+
+        .monitored-pairs {
+            background: #1a1d1e;
+            border-radius: 12px;
+            padding: 1rem;
+            height: calc(100vh - 180px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-title {
+            color: #00ff9d;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-title i {
+            color: #00ff9d;
+            font-size: 12px;
+        }
+
+        .pair-list {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 6px;
+            overflow-y: auto;
+            padding-right: 4px;
+            margin-top: 0.5rem;
+            height: 100%;
+        }
+
+        .pair-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .pair-list::-webkit-scrollbar-track {
+            background: #0f1112;
+        }
+
+        .pair-list::-webkit-scrollbar-thumb {
+            background: #2a2d2e;
+            border-radius: 4px;
+        }
+
+        .pair-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            background: #0f1112;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            min-width: 0;
+        }
+
+        .pair-name {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            color: rgba(255, 255, 255, 0.7);
+            font-family: 'Roboto Mono', monospace;
+            min-width: 0;
+            flex: 1;
+        }
+
+        .pair-name i {
+            font-size: 9px;
+            opacity: 0.5;
+        }
+
+        .pair-price {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 11px;
+            text-align: right;
+            white-space: nowrap;
+            margin-left: 8px;
+            min-width: 70px;
+        }
+
+        .price-up { color: #00ff9d; }
+        .price-down { color: #ff3b30; }
+        .price-unchanged { color: rgba(255, 255, 255, 0.7); }
+
+        .htx-promo {
+            margin-top: auto;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+
+        .htx-logo {
+            width: 120px;
+            height: auto;
+            margin-bottom: 1rem;
+        }
+
+        .htx-promo p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        .htx-button {
+            display: inline-block;
+            background: #00ff9d;
+            color: #000000;
+            padding: 0.8rem 1.5rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: opacity 0.2s ease;
+        }
+
+        .htx-button:hover {
+            opacity: 0.9;
+        }
+
+        .main-content {
+            background: #1a1d1e;
+            border-radius: 12px;
+            padding: 2rem;
+        }
+
+        .signals-nav {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 1rem;
+        }
+
+        .signals-nav button {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .signals-nav button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        .signals-nav button.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+
+        .signal-card {
+            background: #0f1112;
+            border-radius: 12px;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .signal-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .signal-type.buy {
+            background: rgba(0, 255, 157, 0.1);
+            color: #00ff9d;
+        }
+
+        .signal-type.sell {
+            background: rgba(255, 59, 48, 0.1);
+            color: #ff3b30;
+        }
+
+        .signal-pair {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .signal-price {
+            font-family: 'Roboto Mono', monospace;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .signal-time {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+        }
+
+        .connection-status {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #1a1d1e;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+        }
+
+        .status-indicator {
+            border-radius: 50%;
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #ff3b30;
+            transition: background-color 0.2s ease;
+        }
+
+        .status-indicator.connected {
+            background: #00ff9d;
+        }
+
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-content {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .nav-left {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .signals-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-content">
+            <div class="nav-left">
+                <a href="index.html" class="logo-container">
+                    <img src="images/moose.png" alt="CryptoMoose">
+                    <span>CryptoMoose</span>
+                </a>
+                <a href="dashboard.html" class="nav-link">
+                    <i class="fas fa-chart-bar"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="signals.html" class="nav-link active">
+                    <i class="fas fa-signal"></i>
+                    <span>Signals</span>
+                </a>
+                <a href="segment-projections.html" class="nav-link">
+                    <i class="fas fa-layer-group"></i>
+                    <span>Segment Projections</span>
+                </a>
+                <a href="members.html" class="nav-link">
+                    <i class="fas fa-robot"></i>
+                    <span>AI Market Insights</span>
+                </a>
+            </div>
+            <div class="nav-right">
+                <a href="https://t.me/cryptomoose" target="_blank" class="btn-telegram">
+                    <i class="fab fa-telegram"></i>
+                    <span>Get Live Signals on Telegram</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="monitored-pairs">
+            <div class="sidebar-title">
+                <i class="fas fa-chart-line"></i>
+                Monitored Pairs
+            </div>
+            <div class="pair-list">
+                <div class="pair-item">
+                    <span class="pair-name">SUI/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">UNI/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">BTC/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">ETH/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">SOL/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">AVAX/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">MATIC/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">LINK/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">DOT/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+                <div class="pair-item">
+                    <span class="pair-name">ADA/USDT</span>
+                    <span class="pair-price">Loading...</span>
+                </div>
+            </div>
+            <div class="htx-promo">
+                <a href="https://www.htx.com/invite/en-us/1f?invite_code=5duia223" target="_blank">
+                    <img src="./images/htx-logo.png" alt="HTX Logo" class="htx-logo">
+                </a>
+                <p>Trade with confidence on HTX - One of the world's leading cryptocurrency exchanges. Get exclusive benefits using our referral link!</p>
+                <a href="https://www.htx.com/invite/en-us/1f?invite_code=5duia223" target="_blank" class="htx-button">
+                    Start Trading
+                </a>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="signals-nav">
+                <button class="active">All Signals</button>
+                <button>Buy Signals</button>
+                <button>Sell Signals</button>
+            </div>
+            <div class="signals-grid">
+                <!-- Signal cards will be dynamically added here -->
+            </div>
+        </div>
+    </div>
+
+    <div class="connection-status">
+        <div class="status-indicator"></div>
+        <span>Connecting...</span>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="module">
+        import { signalsDisplay } from './js/signals-display.js';
+        // Initialize signals display when DOM is loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Initializing signals display...');
+            signalsDisplay.init();
+        });
+    </script>
+</body>
+</html>

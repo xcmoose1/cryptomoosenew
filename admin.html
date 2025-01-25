@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryptoMoose - Admin Dashboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Modern Dark Theme */
+        :root {
+            --color-bg: #0a0b0c;
+            --color-surface: #16181a;
+            --color-card: #1e2023;
+            --color-primary: #00ff9d;
+            --color-secondary: #94a3b8;
+            --color-text: #ffffff;
+            --color-text-dim: rgba(255, 255, 255, 0.7);
+            --color-danger: #ff3b30;
+            --color-warning: #ff9500;
+            --color-success: #34c759;
+            --border-radius: 12px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header-section {
+            background: var(--color-card);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .header-section h1 {
+            margin: 0;
+            color: var(--color-primary);
+            font-size: 2rem;
+        }
+
+        .header-section p {
+            margin: 0.5rem 0 0;
+            color: var(--color-text-dim);
+        }
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: 60% 40%;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .admin-card {
+            background: var(--color-card);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .admin-card h2 {
+            color: var(--color-primary);
+            margin: 0 0 1.5rem 0;
+            font-size: 1.5rem;
+        }
+
+        .tweet-composer {
+            background: var(--color-surface);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-top: 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .template-selector {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--color-surface);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--color-text);
+            font-size: 1rem;
+            margin-bottom: 1rem;
+            cursor: pointer;
+        }
+
+        .tweet-textarea {
+            width: 100%;
+            min-height: 150px;
+            background: var(--color-bg);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--color-text);
+            padding: 1rem;
+            margin: 1rem 0;
+            font-family: 'Poppins', sans-serif;
+            font-size: 1rem;
+            resize: vertical;
+            line-height: 1.5;
+        }
+
+        .data-preview {
+            background: var(--color-surface);
+            padding: 1.5rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .data-preview h4 {
+            color: var(--color-primary);
+            margin: 0 0 1rem 0;
+            font-size: 1.1rem;
+        }
+
+        .data-preview:last-child {
+            margin-bottom: 0;
+        }
+
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .tag {
+            background: var(--color-surface);
+            color: var(--color-text);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            border: 1px solid var(--color-primary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tag:hover {
+            background: var(--color-primary);
+            color: var(--color-bg);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: var(--color-bg);
+        }
+
+        .btn-primary:hover {
+            background: #00cc7d;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--color-text);
+            border: 1px solid var(--color-primary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(0, 255, 157, 0.1);
+        }
+
+        .schedule-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .metrics-card {
+            background: var(--color-surface);
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .metrics-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--color-primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .character-count {
+            color: var(--color-text-dim);
+            text-align: right;
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        .data-chips {
+            margin: 1rem 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding-top: 1rem;
+        }
+
+        .chip-section {
+            margin-bottom: 1rem;
+        }
+
+        .chip-section h4 {
+            color: var(--color-text-dim);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .data-chip {
+            background: var(--color-surface);
+            border: 1px solid var(--color-primary);
+            color: var(--color-text);
+            padding: 0.25rem 0.75rem;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .data-chip:hover {
+            background: var(--color-primary);
+            color: var(--color-bg);
+        }
+
+        .preview-content {
+            background: var(--color-bg);
+            padding: 1rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .tips-section {
+            background: var(--color-card);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin-top: 2rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tips-section h3 {
+            color: var(--color-primary);
+            margin: 0 0 1rem 0;
+        }
+
+        .tips-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .tips-list li {
+            margin-bottom: 0.5rem;
+            color: var(--color-text-dim);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .tips-list li:before {
+            content: "•";
+            color: var(--color-primary);
+        }
+
+        .copy-success {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--color-success);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .variations-container {
+            margin-top: 1rem;
+            display: grid;
+            gap: 1rem;
+        }
+
+        .variation-card {
+            background: var(--color-surface);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 1rem;
+            position: relative;
+        }
+
+        .variation-card:hover {
+            border-color: var(--color-primary);
+        }
+
+        .variation-actions {
+            position: absolute;
+            right: 1rem;
+            top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        .variation-card:hover .variation-actions {
+            opacity: 1;
+        }
+
+        .variation-action-btn {
+            background: var(--color-card);
+            border: 1px solid var(--color-primary);
+            color: var(--color-text);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s ease;
+        }
+
+        .variation-action-btn:hover {
+            background: var(--color-primary);
+            color: var(--color-bg);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--color-primary);
+            animation: spin 1s linear infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 1200px) {
+            .admin-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .schedule-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header-section {
+                padding: 1.5rem;
+            }
+            
+            .header-section h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="nav">
+        <div class="nav-content">
+            <div class="nav-left">
+                <a href="index.html" class="logo-container">
+                    <img src="images/logo.png" alt="CryptoMoose Logo" class="logo">
+                    <span class="logo-text">CryptoMoose</span>
+                </a>
+            </div>
+            <div class="nav-right">
+                <a href="dashboard.html" class="nav-link">Dashboard</a>
+                <a href="daily_digest.html" class="nav-link">Daily Digest</a>
+                <a href="signals.html" class="nav-link">Signals</a>
+                <a href="admin.html" class="nav-link active">Admin</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="header-section">
+            <h1>Social Media Content Generator</h1>
+            <p>Create engaging content and copy to Buffer</p>
+        </div>
+
+        <div class="admin-grid">
+            <!-- Content Generator Section -->
+            <div class="admin-card">
+                <h2>Generate Content</h2>
+                <select class="template-selector" id="tweetTemplate">
+                    <option value="market">Market Analysis</option>
+                    <option value="policy">Policy Impact</option>
+                    <option value="historical">Historical Analysis</option>
+                    <option value="custom">Custom Post</option>
+                </select>
+
+                <div class="tweet-composer">
+                    <textarea class="tweet-textarea" id="tweetContent" placeholder="Content will be generated by GPT-4..."></textarea>
+                    <div class="character-count">0/280</div>
+                    
+                    <div class="variations-container" id="variations">
+                        <!-- Generated variations will appear here -->
+                    </div>
+
+                    <div class="btn-group">
+                        <button class="btn btn-primary" id="generateContent">
+                            <i class="fas fa-magic"></i> Generate with GPT-4
+                        </button>
+                        <button class="btn btn-secondary" id="generateVariations">
+                            <i class="fas fa-random"></i> More Variations
+                        </button>
+                        <button class="btn btn-secondary" id="copyToBuffer">
+                            <i class="fas fa-copy"></i> Copy to Buffer
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Data Preview -->
+            <div class="admin-card">
+                <h2>Available Data</h2>
+                <div class="data-preview">
+                    <h4>Market Analysis</h4>
+                    <div id="marketData" class="preview-content">Loading...</div>
+                </div>
+                <div class="data-preview">
+                    <h4>Daily Digest Highlights</h4>
+                    <div id="digestHighlights" class="preview-content">Loading...</div>
+                </div>
+                <div class="data-preview">
+                    <h4>Top Signals</h4>
+                    <div id="topSignals" class="preview-content">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Tips Section -->
+        <div class="tips-section">
+            <h3>📝 Quick Tips</h3>
+            <ul class="tips-list">
+                <li>Buffer free plan allows 10 posts per social channel</li>
+                <li>Best posting times: 9 AM, 12 PM, 3 PM, 6 PM (Market hours)</li>
+                <li>Use data chips to quickly add market stats to your posts</li>
+                <li>Always preview before posting to check formatting</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const tweetContent = document.getElementById('tweetContent');
+            const generateBtn = document.getElementById('generateContent');
+            const variationsBtn = document.getElementById('generateVariations');
+            const copyButton = document.getElementById('copyToBuffer');
+            const templateSelector = document.getElementById('tweetTemplate');
+            const variationsContainer = document.getElementById('variations');
+            const characterCount = document.querySelector('.character-count');
+
+            // Generate content with GPT-4
+            generateBtn.addEventListener('click', async () => {
+                const template = templateSelector.value;
+                generateBtn.disabled = true;
+                generateBtn.innerHTML = '<span class="loading"></span>Generating...';
+                
+                try {
+                    const data = await fetchDataForTemplate(template);
+                    const content = await generateContent(template, data);
+                    tweetContent.value = content;
+                    tweetContent.dispatchEvent(new Event('input'));
+                    
+                    // Generate initial variations
+                    const variations = await generateVariations(content);
+                    displayVariations(variations);
+                } catch (error) {
+                    console.error('Error generating content:', error);
+                    alert('Failed to generate content. Please try again.');
+                } finally {
+                    generateBtn.disabled = false;
+                    generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate with GPT-4';
+                }
+            });
+
+            // Generate more variations
+            variationsBtn.addEventListener('click', async () => {
+                if (!tweetContent.value.trim()) {
+                    alert('Please generate initial content first');
+                    return;
+                }
+
+                variationsBtn.disabled = true;
+                variationsBtn.innerHTML = '<span class="loading"></span>Generating...';
+                
+                try {
+                    const variations = await generateVariations(tweetContent.value);
+                    displayVariations(variations);
+                } catch (error) {
+                    console.error('Error generating variations:', error);
+                    alert('Failed to generate variations. Please try again.');
+                } finally {
+                    variationsBtn.disabled = false;
+                    variationsBtn.innerHTML = '<i class="fas fa-random"></i> More Variations';
+                }
+            });
+
+            // Display variations
+            function displayVariations(variations) {
+                variationsContainer.innerHTML = variations.map((text, index) => `
+                    <div class="variation-card">
+                        <div class="variation-actions">
+                            <button class="variation-action-btn use-variation">Use</button>
+                            <button class="variation-action-btn copy-variation">Copy</button>
+                        </div>
+                        <div class="variation-text">${text}</div>
+                    </div>
+                `).join('');
+
+                // Add event listeners to variation buttons
+                variationsContainer.querySelectorAll('.use-variation').forEach((btn, index) => {
+                    btn.addEventListener('click', () => {
+                        tweetContent.value = variations[index];
+                        tweetContent.dispatchEvent(new Event('input'));
+                    });
+                });
+
+                variationsContainer.querySelectorAll('.copy-variation').forEach((btn, index) => {
+                    btn.addEventListener('click', async () => {
+                        try {
+                            await navigator.clipboard.writeText(variations[index]);
+                            showNotification('Copied to clipboard!');
+                        } catch (err) {
+                            alert('Failed to copy text. Please try again.');
+                        }
+                    });
+                });
+            }
+
+            // Fetch data for template
+            async function fetchDataForTemplate(template) {
+                try {
+                    const [marketData, policyData, currentData, historicalData, signalData] = await Promise.all([
+                        fetch('/api/market-data').then(r => r.json()),
+                        fetch('/api/daily-digest/latest').then(r => r.json()),
+                        fetch('/api/market-data/current').then(r => r.json()),
+                        fetch('/api/market-data/historical').then(r => r.json()),
+                        fetch('/api/signals/latest').then(r => r.json())
+                    ]);
+
+                    return {
+                        marketData: marketData?.summary || 'No market data available',
+                        policyData: policyData?.highlights || 'No policy data available',
+                        currentData: currentData?.analysis || 'No current data available',
+                        historicalData: historicalData?.patterns || 'No historical data available',
+                        signalData: signalData?.alerts || 'No signal data available'
+                    };
+                } catch (error) {
+                    console.error('Error fetching template data:', error);
+                    return {
+                        marketData: 'Error fetching market data',
+                        policyData: 'Error fetching policy data',
+                        currentData: 'Error fetching current data',
+                        historicalData: 'Error fetching historical data',
+                        signalData: 'Error fetching signal data'
+                    };
+                }
+            }
+
+            // Generate content using GPT-4
+            async function generateContent(template, data) {
+                try {
+                    const response = await fetch('/api/content/generate-content', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ template, data })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to generate content');
+                    }
+
+                    const result = await response.json();
+                    return result.content;
+                } catch (error) {
+                    console.error('Content generation error:', error);
+                    throw new Error('Failed to generate content. Check console for details.');
+                }
+            }
+
+            // Generate variations using GPT-4
+            async function generateVariations(content) {
+                try {
+                    const response = await fetch('/api/content/generate-variations', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ content })
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.error || 'Failed to generate variations');
+                    }
+
+                    const result = await response.json();
+                    return result.variations;
+                } catch (error) {
+                    console.error('Variations generation error:', error);
+                    throw new Error('Failed to generate variations. Check console for details.');
+                }
+            }
+
+            // Show notification
+            function showNotification(message) {
+                const notification = document.createElement('div');
+                notification.className = 'copy-success';
+                notification.innerHTML = `<i class="fas fa-check"></i> ${message}`;
+                document.body.appendChild(notification);
+                setTimeout(() => notification.remove(), 3000);
+            }
+
+            // Initialize
+            loadMarketData();
+            loadDigestHighlights();
+            loadTopSignals();
+        });
+    </script>
+</body>
+</html>

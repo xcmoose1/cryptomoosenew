@@ -1,0 +1,98 @@
+<![CDATA[<div class="sector-analysis-section glass">
+    <div class="section-header">
+        <div class="header-left">
+            <h3><i class="fas fa-layer-group"></i> Sector Analysis</h3>
+            <div class="next-update">
+                <span class="update-label">Next Update:</span>
+                <span id="updateCountdown" class="countdown">Loading...</span>
+            </div>
+        </div>
+        <div class="sector-selector">
+            <button class="sector-btn active" data-sector="gaming">
+                <i class="fas fa-gamepad"></i> Gaming
+            </button>
+            <button class="sector-btn" data-sector="l1">
+                <i class="fas fa-cube"></i> Layer 1
+            </button>
+            <button class="sector-btn" data-sector="l2">
+                <i class="fas fa-cubes"></i> Layer 2
+            </button>
+            <button class="sector-btn" data-sector="defi">
+                <i class="fas fa-university"></i> DeFi
+            </button>
+            <button class="sector-btn" data-sector="launchpads">
+                <i class="fas fa-rocket"></i> Launchpads
+            </button>
+            <button class="sector-btn" data-sector="ai">
+                <i class="fas fa-brain"></i> AI
+            </button>
+            <button class="sector-btn" data-sector="depin">
+                <i class="fas fa-network-wired"></i> DePIN
+            </button>
+            <button class="sector-btn" data-sector="privacy">
+                <i class="fas fa-user-secret"></i> Privacy
+            </button>
+            <button class="sector-btn" data-sector="memes">
+                <i class="fas fa-laugh"></i> Memes
+            </button>
+        </div>
+    </div>
+
+    <div class="sector-content">
+        <div class="sector-overview glass">
+            <h4>Sector Overview</h4>
+            <div class="sector-metrics">
+                <div class="metric">
+                    <span class="label">Market Cap</span>
+                    <span id="sectorMarketCap" class="value">Loading...</span>
+                </div>
+                <div class="metric">
+                    <span class="label">24h Volume</span>
+                    <span id="sectorVolume" class="value">Loading...</span>
+                </div>
+                <div class="metric">
+                    <span class="label">24h Change</span>
+                    <span id="sectorChange" class="value">Loading...</span>
+                </div>
+                <div class="metric">
+                    <span class="label">Projects</span>
+                    <span id="sectorProjects" class="value">Loading...</span>
+                </div>
+            </div>
+            
+            <!-- Moved top projects here and made it more compact -->
+            <div class="top-projects">
+                <h4>Top Projects</h4>
+                <div class="projects-table" id="topAssetsList">
+                    <div class="loading">Loading top projects...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sector-analysis glass">
+            <h4>Sector Insights</h4>
+            <div class="sector-insights">
+                <div class="insight-card">
+                    <h5>📈 Market Trends</h5>
+                    <p id="sectorTrends" class="insight-text">Analyzing trends...</p>
+                </div>
+                <div class="insight-card">
+                    <h5>🔄 Market Structure</h5>
+                    <p id="marketStructure" class="insight-text">Analyzing structure...</p>
+                </div>
+                <div class="insight-card">
+                    <h5>🎯 Opportunities</h5>
+                    <p id="sectorOpportunities" class="insight-text">Analyzing opportunities...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import required scripts -->
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+
+<script type="module">
+    import { sectorAnalysis } from './sector-analysis.js';
+    sectorAnalysis.init().catch(console.error);
+</script>
