@@ -118,6 +118,24 @@ app.get('/healthz', (req, res) => {
     res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// Signals history endpoint
+app.get('/api/signals/history', async (req, res) => {
+    try {
+        if (!signalsService) {
+            throw new Error('Signals service not initialized');
+        }
+        const signals = await signalsService.getHistoricalSignals();
+        res.json({ success: true, signals });
+    } catch (error) {
+        console.error('Error fetching signal history:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to fetch signal history',
+            details: error.message 
+        });
+    }
+});
+
 // Middleware
 app.use(cors({
     origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
@@ -217,7 +235,9 @@ async function initializeServices() {
     return signalsService;
 }
 
-initializeServices().then(signalsService => {
+let signalsService;
+initializeServices().then(s => {
+    signalsService = s;
     // WebSocket connection handler
     wss.on('connection', (ws, req) => {
         console.log('WebSocket client connected from:', req.socket.remoteAddress);
