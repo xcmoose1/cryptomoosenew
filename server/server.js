@@ -31,7 +31,6 @@ import cors from 'cors';
 import OpenAI from 'openai';
 import fetch from 'node-fetch';
 import axios from 'axios';
-import { WebSocketServer } from 'ws';
 import http from 'http';
 import opportunitiesRouter from '../routes/opportunities.js';
 import dailyDigestRouter from '../routes/daily-digest.js';
@@ -193,6 +192,11 @@ app.use('/images', express.static(path.join(__dirname, '..', 'images')));
 // Serve section files
 app.use('/sections', express.static(path.join(__dirname, '..', 'sections')));
 
+// Health check endpoint
+app.get('/healthz', (req, res) => {
+    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 // Root route handler
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'members.html'));
@@ -203,34 +207,25 @@ app.get('/daily-digest', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'daily_digest.html'));
 });
 
-// Health check endpoint
-app.get('/healthz', (req, res) => {
-    res.status(200).json({ status: 'healthy' });
-});
-
 // Constants
 const PORT = process.env.PORT || 10000;
-const WS_PORT = process.env.WS_PORT || 10001;
 
-// Initialize WebSocket server
-const wsServer = new WebSocketServer({ port: WS_PORT });
-
-// Initialize services and start servers
+// Initialize services and start server
 initializeServices().then(signalsService => {
-    // WebSocket connection handler
-    wsServer.on('connection', (ws) => {
+    // WebSocket setup using the same server instance
+    const wss = new (require('ws')).Server({ server });
+
+    wss.on('connection', (ws) => {
         console.log('WebSocket client connected');
         signalsService.handleWebSocketConnection(ws);
     });
 
-    // Start main HTTP server
+    // Start server
     server.listen(PORT, () => {
-        console.log(`HTTP Server running on port ${PORT}`);
+        console.log(`Server running on port ${PORT}`);
+        console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`Server URL: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
     });
-
-    // Log server information
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`Server URL: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
 }).catch(error => {
     console.error('Error initializing services:', error);
     process.exit(1);
@@ -240,11 +235,8 @@ initializeServices().then(signalsService => {
 process.on('SIGTERM', () => {
     console.log('SIGTERM received. Shutting down gracefully...');
     server.close(() => {
-        console.log('HTTP Server closed');
-        wsServer.close(() => {
-            console.log('WebSocket Server closed');
-            process.exit(0);
-        });
+        console.log('Server closed');
+        process.exit(0);
     });
 });
 
