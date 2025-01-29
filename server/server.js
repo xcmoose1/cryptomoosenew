@@ -51,6 +51,7 @@ import signalsRouter from '../signals/routes/signals-routes.js';
 import contentRouter from './routes/content-routes.js';
 import marketOverviewRouter from '../routes/market-overview.js';
 import binanceProxyRouter from '../routes/binance-proxy.js';
+import { WebSocketServer } from 'ws';
 
 // Rate Limiter implementation
 class RateLimiter {
@@ -213,7 +214,7 @@ const PORT = process.env.PORT || 10000;
 // Initialize services and start server
 initializeServices().then(signalsService => {
     // WebSocket setup using the same server instance
-    const wss = new (require('ws')).Server({ server });
+    const wss = new WebSocketServer({ server });
 
     wss.on('connection', (ws) => {
         console.log('WebSocket client connected');
