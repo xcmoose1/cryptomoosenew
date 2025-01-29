@@ -218,38 +218,37 @@
 
         /* Nav Styles */
         .nav {
-            background: rgba(18, 18, 18, 0.8);
-            backdrop-filter: blur(10px);
+            background: #1a1a1a;
+            border-bottom: 1px solid #2a2a2a;
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             z-index: 1000;
-            padding: 1rem 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .nav-content {
             max-width: 1400px;
             margin: 0 auto;
-            padding: 0 2rem;
+            padding: 0 20px;
+            height: 60px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .nav-left, .nav-right {
+        .nav-left {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 30px;
         }
 
         .logo-container {
             display: flex;
             align-items: center;
+            gap: 10px;
             text-decoration: none;
-            color: #ffffff;
-            gap: 0.5rem;
+            color: #fff;
         }
 
         .logo-container img {
@@ -258,42 +257,40 @@
         }
 
         .nav-link {
-            color: var(--color-text);
-            text-decoration: none;
-            font-weight: 500;
-            padding: 0.5rem 1rem;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .nav-link:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .nav-link i {
-            font-size: 1rem;
-        }
-
-        .nav-link span {
-            font-size: 0.9rem;
-        }
-
-        .nav-link.twitter {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 16px;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
-            margin-left: 12px;
+            color: #888;
+            text-decoration: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
         }
 
-        .nav-link.twitter:hover {
-            background: rgba(255, 255, 255, 0.2);
+        .nav-link:hover,
+        .nav-link.active {
+            color: #fff;
+            background: #2d4a6d;
+        }
+
+        .nav-link i {
+            font-size: 16px;
+        }
+
+        .btn-telegram {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #2aabee;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            transition: background-color 0.2s;
+        }
+
+        .btn-telegram:hover {
+            background: #229ed9;
         }
 
         /* Language Selector Styles */
@@ -1071,32 +1068,15 @@
                     <i class="fas fa-signal"></i>
                     <span>Signals</span>
                 </a>
-                <a href="segment-projections.html" class="nav-link">
-                    <i class="fas fa-layer-group"></i>
-                    <span>Segment Projections</span>
-                </a>
-                <a href="members.html" class="nav-link">
+                <a href="new-ai-insights.html" class="nav-link">
                     <i class="fas fa-robot"></i>
-                    <span>AI Market Insights</span>
+                    <span>AI Insights</span>
                 </a>
             </div>
             <div class="nav-right">
-                <div class="language-selector">
-                    <select id="languageSelect" onchange="changeLanguage(this.value)">
-                        <option value="en">English</option>
-                        <option value="ru">Русский</option>
-                        <option value="no">Norsk</option>
-                        <option value="es">Español</option>
-                        <option value="fr">Français</option>
-                    </select>
-                </div>
-                <a href="https://t.me/cryptomoose" target="_blank" class="btn-telegram">
+                <a href="https://t.me/cryptomoose_signals" target="_blank" class="btn-telegram">
                     <i class="fab fa-telegram"></i>
                     <span>Get Live Signals on Telegram</span>
-                </a>
-                <a href="https://x.com/XCryptoMoose" target="_blank" class="nav-link twitter">
-                    <img src="images/x-logo.svg" alt="X (Twitter)" style="height: 16px; width: 16px;">
-                    <span>Follow Alpha</span>
                 </a>
             </div>
         </div>
