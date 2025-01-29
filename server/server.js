@@ -103,18 +103,17 @@ class RateLimiter {
     }
 }
 
-// Create Express app
+// Create Express app and server
 const app = express();
 const server = http.createServer(app);
 
-// Initialize services
-async function initializeServices() {
-    console.log('Initializing services...');
-    const signalsService = new (await import('../signals/services/signals-service.js')).SignalsService();
-    await signalsService.initialize();
-    await signalsService.initializeService();
-    return signalsService;
-}
+// Initialize WebSocket server first
+const wss = new WebSocketServer({ server });
+
+// Health check endpoint - make this the first route
+app.get('/healthz', (req, res) => {
+    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
 
 // Middleware
 app.use(cors({
@@ -193,11 +192,6 @@ app.use('/images', express.static(path.join(__dirname, '..', 'images')));
 // Serve section files
 app.use('/sections', express.static(path.join(__dirname, '..', 'sections')));
 
-// Health check endpoint
-app.get('/healthz', (req, res) => {
-    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
-});
-
 // Root route handler
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'members.html'));
@@ -212,17 +206,28 @@ app.get('/daily-digest', (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 // Initialize services and start server
-initializeServices().then(signalsService => {
-    // WebSocket setup using the same server instance
-    const wss = new WebSocketServer({ server });
+async function initializeServices() {
+    console.log('Initializing services...');
+    const signalsService = new (await import('../signals/services/signals-service.js')).SignalsService();
+    await signalsService.initialize();
+    await signalsService.initializeService();
+    return signalsService;
+}
 
+initializeServices().then(signalsService => {
+    // WebSocket connection handler
     wss.on('connection', (ws) => {
         console.log('WebSocket client connected');
-        signalsService.handleWebSocketConnection(ws);
+        if (signalsService && typeof signalsService.handleWebSocketConnection === 'function') {
+            signalsService.handleWebSocketConnection(ws);
+        } else {
+            console.error('SignalsService not properly initialized');
+            ws.close();
+        }
     });
 
     // Start server
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`Server URL: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
