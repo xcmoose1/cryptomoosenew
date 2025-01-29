@@ -58,8 +58,9 @@ export class SignalsDisplay {
             this.ws.close();
         }
 
-        // Connect to the WebSocket server on port 10000
-        const wsUrl = `ws://${window.location.hostname}:10000`;
+        // Use secure WebSocket (wss) when on HTTPS
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
         
         console.log(`SignalsDisplay: Connecting to WebSocket at ${wsUrl}`);
         this.ws = new WebSocket(wsUrl);
