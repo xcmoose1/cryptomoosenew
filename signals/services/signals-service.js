@@ -1210,90 +1210,54 @@ export class SignalsService {
     }
 
     handleWebSocketConnection(ws) {
+        if (!ws || typeof ws.send !== 'function') {
+            console.error('Invalid WebSocket connection');
+            return;
+        }
+
         console.log('Client connected to WebSocket');
         this.clients.add(ws);
+        
+        // Send initial state
+        try {
+            ws.send(JSON.stringify({
+                type: 'system',
+                data: {
+                    message: '🔌 Connected to signal service',
+                    timestamp: Date.now(),
+                    status: 'connected',
+                    pairs: Array.from(this.indicators.keys()),
+                    processedCandles: this.processedCandles,
+                    isInitialized: this.isInitialized
+                }
+            }));
+
+            // Send current status update
+            this.printSystemStatus();
+        } catch (error) {
+            console.error('Error sending initial state:', error);
+        }
+
+        // Handle client messages
+        ws.on('message', (message) => {
+            try {
+                const data = JSON.parse(message);
+                console.log('Received message from client:', data);
+                // Handle any client messages here
+            } catch (error) {
+                console.error('Error handling client message:', error);
+            }
+        });
         
         ws.on('close', () => {
             console.log('Client disconnected from WebSocket');
             this.clients.delete(ws);
         });
 
-        // Send connection message
-        ws.send(JSON.stringify({
-            type: 'system',
-            data: {
-                message: '🔌 Connected to signal service',
-                timestamp: Date.now(),
-                status: 'connected'
-            }
-        }));
-    }
-
-    formatSignalMessage(symbol, type, price, trend, rsi, volumeRatio, emaFast, emaSlow, volumeMA) {
-        try {
-            // Calculate dynamic stop loss and targets based on trend
-            let stopLoss, targets;
-            if (trend === 'bullish') {
-                stopLoss = (price * (1 - 0.01)).toFixed(4);
-                targets = [
-                    (price * (1 + 0.015)).toFixed(4),
-                    (price * (1 + 0.025)).toFixed(4),
-                    (price * (1 + 0.035)).toFixed(4)
-                ];
-            } else {
-                stopLoss = (price * (1 + 0.01)).toFixed(4);
-                targets = [
-                    (price * (1 - 0.015)).toFixed(4),
-                    (price * (1 - 0.025)).toFixed(4),
-                    (price * (1 - 0.035)).toFixed(4)
-                ];
-            }
-
-            // Calculate average R:R ratio across all targets
-            const riskPips = Math.abs(price - parseFloat(stopLoss));
-            const rewardPips = targets.map(t => Math.abs(price - parseFloat(t)));
-            const avgRewardPips = rewardPips.reduce((a, b) => a + b, 0) / rewardPips.length;
-            const riskRewardRatio = (avgRewardPips / riskPips).toFixed(2);
-
-            // Determine market trend and indicator states
-            const macdTrend = emaFast > emaSlow ? 'Bullish' : 'Bearish';
-            const emaState = emaFast > emaSlow ? 'Above' : 'Below';
-            const smaState = price > volumeMA ? 'Above' : 'Below';
-
-            return `
-🟢 SIGNAL ALERT: ${type} ${symbol}
-
-💰 Entry Zone: ${price.toFixed(4)} - ${(price * 1.002).toFixed(4)}
-🛑 Stop Loss: ${stopLoss}
-
-🎯 Targets:
-1️⃣ ${targets[0]}
-2️⃣ ${targets[1]}
-3️⃣ ${targets[2]}
-
-📊 Risk/Reward Ratio: 1:${riskRewardRatio}
-
-📈 Market Analysis:
-• Trend: ${trend === 'bullish' ? '📈 BULLISH' : '📉 BEARISH'}
-• RSI: ${rsi.toFixed(2)}
-• Volume Ratio: ${volumeRatio.toFixed(2)}x
-
-⚡️ Technical Indicators:
-• MACD: ${macdTrend}
-• EMA: Price ${emaState} EMA
-• SMA: Price ${smaState} SMA
-
-🔄 Trade on HTX:
-${SIGNALS_CONFIG.REFERRAL_LINK}
-• Up to 20% fee discount
-• $5000 sign-up bonus
-• Zero maker fees
-
-#${symbol.replace('/', '')} #CryptoSignals #TradingSignals`;
-        } catch (error) {
-            console.error('Error formatting signal message:', error);
-            return 'Error formatting signal message';
-        }
+        ws.on('error', (error) => {
+            console.error('WebSocket error:', error);
+            this.clients.delete(ws);
+        });
     }
 
     async handleReconnect() {

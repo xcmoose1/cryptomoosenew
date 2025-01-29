@@ -108,7 +108,10 @@ const app = express();
 const server = http.createServer(app);
 
 // Initialize WebSocket server first
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({ 
+    server,
+    path: '/ws'  // Specify WebSocket path
+});
 
 // Health check endpoint - make this the first route
 app.get('/healthz', (req, res) => {
@@ -216,12 +219,17 @@ async function initializeServices() {
 
 initializeServices().then(signalsService => {
     // WebSocket connection handler
-    wss.on('connection', (ws) => {
-        console.log('WebSocket client connected');
-        if (signalsService && typeof signalsService.handleWebSocketConnection === 'function') {
-            signalsService.handleWebSocketConnection(ws);
-        } else {
-            console.error('SignalsService not properly initialized');
+    wss.on('connection', (ws, req) => {
+        console.log('WebSocket client connected from:', req.socket.remoteAddress);
+        try {
+            if (signalsService && typeof signalsService.handleWebSocketConnection === 'function') {
+                signalsService.handleWebSocketConnection(ws);
+            } else {
+                console.error('SignalsService not properly initialized');
+                ws.close();
+            }
+        } catch (error) {
+            console.error('Error handling WebSocket connection:', error);
             ws.close();
         }
     });
@@ -231,6 +239,7 @@ initializeServices().then(signalsService => {
         console.log(`Server running on port ${PORT}`);
         console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`Server URL: ${process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`}`);
+        console.log(`WebSocket URL: ${process.env.RENDER_EXTERNAL_URL ? process.env.RENDER_EXTERNAL_URL.replace('http', 'ws') : `ws://localhost:${PORT}`}/ws`);
     });
 }).catch(error => {
     console.error('Error initializing services:', error);
