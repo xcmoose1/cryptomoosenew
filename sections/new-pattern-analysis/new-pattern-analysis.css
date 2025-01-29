@@ -1,0 +1,151 @@
+.pattern-analysis-container {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    grid-template-rows: auto 1fr;
+    gap: 1rem;
+    height: 100%;
+}
+
+/* Pattern Screener */
+.pattern-screener {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    background: var(--panel-bg);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+.screener-filters {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.screener-filters select {
+    padding: 0.5rem;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+#pattern-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.pattern-item {
+    padding: 0.75rem;
+    background: var(--secondary-bg);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.pattern-item:hover {
+    background: var(--accent-color);
+}
+
+.pattern-item.active {
+    background: var(--accent-color);
+}
+
+/* Pattern Chart */
+.pattern-chart-container {
+    grid-column: 2;
+    grid-row: 1;
+    background: var(--panel-bg);
+    border-radius: 8px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+#pattern-chart {
+    flex-grow: 1;
+    min-height: 400px;
+}
+
+.pattern-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+/* Historical Analysis */
+.historical-analysis {
+    grid-column: 2;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.historical-analysis .card {
+    background: var(--panel-bg);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.historical-analysis h3 {
+    margin: 0 0 1rem 0;
+    color: var(--accent-color);
+}
+
+/* Pattern Statistics */
+.pattern-stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.pattern-stat:last-child {
+    border-bottom: none;
+}
+
+/* Similar Patterns */
+.similar-pattern {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.similar-pattern:hover {
+    background: var(--secondary-bg);
+}
+
+.similar-pattern:last-child {
+    border-bottom: none;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .pattern-analysis-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr;
+    }
+
+    .pattern-screener {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .pattern-chart-container {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .historical-analysis {
+        grid-column: 1;
+        grid-row: 3;
+        grid-template-columns: 1fr;
+    }
+}

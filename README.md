@@ -115,6 +115,626 @@ The Market Overview feature provides a comprehensive daily analysis of the crypt
 
 The overview is automatically updated every 5 minutes to ensure fresh data, while using intelligent caching to prevent API rate limits.
 
+## AmCharts Integration Guide
+
+### Overview
+This section provides a comprehensive guide on integrating AmCharts 5 into your project, specifically for creating cryptocurrency charts. We'll cover everything from basic setup to advanced features and troubleshooting.
+
+### Prerequisites
+- A valid AmCharts 5 license key (required for certain features)
+- Basic understanding of HTML, CSS, and JavaScript
+- Modern web browser with JavaScript enabled
+
+### Step-by-Step Integration
+
+#### 1. Loading Required Scripts
+```html
+<!-- Always load these scripts in this exact order -->
+<script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/xy.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+
+<!-- Optional: Only if you need stock charts -->
+<script src="https://cdn.amcharts.com/lib/5/stock.js"></script>
+```
+
+**Important Notes:**
+- Scripts must be loaded in the correct order as shown above
+- Place scripts at the bottom of the `<body>` tag for optimal loading
+- Never initialize charts before scripts are fully loaded
+- Use `defer` attribute if placing scripts in `<head>`
+
+#### 2. HTML Structure
+```html
+<!-- Container for the chart -->
+<div id="chartdiv" style="width: 100%; height: 500px;"></div>
+
+<!-- Optional: Controls for chart interaction -->
+<div class="controls">
+    <button class="timeframe-btn">1H</button>
+    <button class="indicator-btn">MA</button>
+</div>
+```
+
+#### 3. License Configuration
+```javascript
+// Add this before any chart initialization
+am5.addLicense("YOUR-LICENSE-KEY");
+```
+
+#### 4. Basic Chart Initialization
+```javascript
+// Wait for window load to ensure all scripts are ready
+window.addEventListener('load', async () => {
+    // Create root
+    const root = am5.Root.new("chartdiv");
+    
+    // Set themes
+    root.setThemes([
+        am5themes_Dark.new(root),
+        am5themes_Animated.new(root)
+    ]);
+
+    // Create chart
+    const chart = root.container.children.push(
+        am5xy.XYChart.new(root, {
+            panX: true,
+            panY: true,
+            wheelX: "panX",
+            wheelY: "zoomX",
+            pinchZoomX: true
+        })
+    );
+});
+```
+
+#### 5. Creating Axes
+```javascript
+// Create X-axis (time-based)
+const xAxis = chart.xAxes.push(
+    am5xy.DateAxis.new(root, {
+        baseInterval: { timeUnit: "minute", count: 1 },
+        renderer: am5xy.AxisRendererX.new(root, {
+            minGridDistance: 50,
+            pan: "zoom"
+        })
+    })
+);
+
+// Create Y-axis (value-based)
+const yAxis = chart.yAxes.push(
+    am5xy.ValueAxis.new(root, {
+        renderer: am5xy.AxisRendererY.new(root, {
+            pan: "zoom"
+        })
+    })
+);
+```
+
+#### 6. Creating Series (Candlesticks)
+```javascript
+const series = chart.series.push(
+    am5xy.CandlestickSeries.new(root, {
+        name: "BTC/USDT",
+        xAxis: xAxis,
+        yAxis: yAxis,
+        valueYField: "Close",
+        openValueYField: "Open",
+        lowValueYField: "Low",
+        highValueYField: "High",
+        valueXField: "Date",
+        tooltip: am5.Tooltip.new(root, {
+            pointerOrientation: "horizontal",
+            labelText: "[bold]{name}[/]\nOpen: {openValueY}\nHigh: {highValueY}\nLow: {lowValueY}\nClose: {valueY}"
+        })
+    })
+);
+```
+
+#### 7. Setting Colors and Styles
+```javascript
+// Set colors for rising and falling candles
+series.columns.template.states.create("riseFromOpen", {
+    fill: am5.color(0x00ff00),
+    stroke: am5.color(0x00ff00)
+});
+
+series.columns.template.states.create("dropFromOpen", {
+    fill: am5.color(0xff0000),
+    stroke: am5.color(0xff0000)
+});
+```
+
+#### 8. Adding Interactive Features
+```javascript
+// Add cursor
+chart.set("cursor", am5xy.XYCursor.new(root, {
+    behavior: "none",
+    xAxis: xAxis,
+    yAxis: yAxis
+}));
+
+// Add scrollbar
+chart.set("scrollbarX", am5.Scrollbar.new(root, {
+    orientation: "horizontal"
+}));
+```
+
+### Common Pitfalls and Solutions
+
+1. **Scripts Loading Order**
+   - Problem: "Cannot read properties of undefined"
+   - Solution: Ensure scripts are loaded in correct order and wait for window.load
+
+2. **Chart Not Displaying**
+   - Check container div has explicit height
+   - Verify data format matches series field names exactly
+   - Console.log data before setting to series
+
+3. **Performance Issues**
+   - Limit data points (500-1000 recommended)
+   - Use data grouping for large datasets
+   - Enable progressive loading for real-time data
+
+### Best Practices
+
+1. **Memory Management**
+   ```javascript
+   // Dispose chart when component unmounts
+   root.dispose();
+   ```
+
+2. **Error Handling**
+   ```javascript
+   try {
+       // Chart initialization code
+   } catch (error) {
+       console.error('Chart initialization failed:', error);
+       // Fallback or error display logic
+   }
+   ```
+
+3. **Data Updates**
+   ```javascript
+   // Efficient data updates
+   series.data.setAll(data); // For complete refresh
+   series.data.push(newData); // For adding single points
+   ```
+
+### Advanced Features
+
+#### 1. Technical Indicators
+```javascript
+// Example: Adding Moving Average
+const maSeries = chart.series.push(
+    am5xy.LineSeries.new(root, {
+        name: "MA(20)",
+        xAxis: xAxis,
+        yAxis: yAxis,
+        valueXField: "Date",
+        valueYField: "MA",
+        stroke: am5.color(0x00ff00)
+    })
+);
+```
+
+#### 2. Real-time Updates
+```javascript
+// Example: WebSocket integration
+const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@kline_1m');
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    series.data.push({
+        Date: data.k.t,
+        Open: parseFloat(data.k.o),
+        High: parseFloat(data.k.h),
+        Low: parseFloat(data.k.l),
+        Close: parseFloat(data.k.c)
+    });
+};
+```
+
+### Debugging Tips
+
+1. **Enable Verbose Logging**
+   ```javascript
+   am5.debug = true;
+   ```
+
+2. **Check Data Format**
+   ```javascript
+   console.log('Data sample:', {
+       expectedFormat: {
+           Date: 1643673600000,
+           Open: 38000,
+           High: 38500,
+           Low: 37800,
+           Close: 38200
+       },
+       actualData: data[0]
+   });
+   ```
+
+3. **Verify DOM Ready**
+   ```javascript
+   console.log('Chart container:', document.getElementById('chartdiv'));
+   console.log('Container dimensions:', {
+       width: chartDiv.offsetWidth,
+       height: chartDiv.offsetHeight
+   });
+   ```
+
+### Additional Resources
+
+1. [AmCharts 5 Documentation](https://www.amcharts.com/docs/v5/)
+2. [API Reference](https://www.amcharts.com/docs/v5/reference/)
+3. [Examples Gallery](https://www.amcharts.com/demos/)
+
+### Support and Troubleshooting
+
+If you encounter issues:
+1. Check browser console for errors
+2. Verify all prerequisites are met
+3. Review the implementation against this guide
+4. Search [AmCharts Support Forum](https://www.amcharts.com/support/forum/)
+
+For project-specific questions, create an issue in our repository.
+
+## Binance Integration Guide
+
+### Overview
+This section explains how to properly integrate Binance's API to fetch kline (candlestick) data and handle real-time updates. We'll cover both REST API and WebSocket implementations, along with proper error handling and rate limiting.
+
+### Prerequisites
+- Node.js server for proxy implementation (to avoid CORS issues)
+- Basic understanding of REST APIs and WebSockets
+- Familiarity with async/await and Promises
+
+### Server-Side Setup (Proxy)
+
+#### 1. Create Proxy Route
+```javascript
+// routes/binance-proxy.js
+const express = require('express');
+const router = express.Router();
+const fetch = require('node-fetch');
+
+const BINANCE_API_BASE = 'https://api.binance.com/api/v3';
+
+router.get('/klines', async (req, res) => {
+    try {
+        const { symbol, interval, limit } = req.query;
+        const url = `${BINANCE_API_BASE}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Binance API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        res.json(data);
+    } catch (error) {
+        console.error('Proxy error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+module.exports = router;
+```
+
+#### 2. Mount Proxy in Express Server
+```javascript
+// server.js
+const express = require('express');
+const app = express();
+const binanceProxy = require('./routes/binance-proxy');
+
+app.use('/api/binance', binanceProxy);
+```
+
+### Client-Side Implementation
+
+#### 1. Binance Handler Class
+```javascript
+// js/config/binance-config.js
+export class BinanceHandler {
+    constructor() {
+        this.baseUrl = 'http://localhost:3000/api/binance';
+        this.timeframes = {
+            '1m': '1m',
+            '3m': '3m',
+            '5m': '5m',
+            '15m': '15m',
+            '30m': '30m',
+            '1h': '1h',
+            '2h': '2h',
+            '4h': '4h',
+            '6h': '6h',
+            '8h': '8h',
+            '12h': '12h',
+            '1d': '1d',
+            '3d': '3d',
+            '1w': '1w',
+            '1M': '1M'
+        };
+    }
+
+    async makeRequest(endpoint, params = {}) {
+        try {
+            const queryParams = new URLSearchParams(params).toString();
+            const url = `${this.baseUrl}${endpoint}?${queryParams}`;
+            
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('API request failed:', error);
+            throw error;
+        }
+    }
+
+    timeframeToInterval(timeframe) {
+        return this.timeframes[timeframe] || '1h';
+    }
+
+    async getKlines(symbol, timeframe, limit = 500) {
+        try {
+            const params = {
+                symbol: symbol.toUpperCase(),
+                interval: this.timeframeToInterval(timeframe),
+                limit: limit
+            };
+            
+            const data = await this.makeRequest('/klines', params);
+            
+            // Validate response format
+            if (!Array.isArray(data)) {
+                throw new Error('Invalid response format');
+            }
+
+            return data;
+        } catch (error) {
+            console.error('Failed to fetch klines:', error);
+            throw error;
+        }
+    }
+}
+
+// Create singleton instance
+export const binanceHandler = new BinanceHandler();
+```
+
+### Understanding Kline Data
+
+#### Kline Array Structure
+Each kline (candlestick) from Binance API is an array with the following structure:
+```javascript
+[
+    0  => Kline open time (timestamp in ms),
+    1  => Open price,
+    2  => High price,
+    3  => Low price,
+    4  => Close price,
+    5  => Volume,
+    6  => Kline close time,
+    7  => Quote asset volume,
+    8  => Number of trades,
+    9  => Taker buy base asset volume,
+    10 => Taker buy quote asset volume,
+    11 => Unused field
+]
+```
+
+#### Data Processing for AmCharts
+```javascript
+// Convert Binance data format to AmCharts format
+function processKlineData(klines) {
+    return klines.map(k => ({
+        Date: k[0],  // timestamp
+        Open: parseFloat(k[1]),
+        High: parseFloat(k[2]),
+        Low: parseFloat(k[3]),
+        Close: parseFloat(k[4]),
+        Volume: parseFloat(k[5])
+    }));
+}
+```
+
+### Real-time Updates with WebSocket
+
+#### 1. WebSocket Setup
+```javascript
+class BinanceWebSocket {
+    constructor(symbol, interval, onUpdate) {
+        this.baseUrl = 'wss://stream.binance.com:9443/ws';
+        this.symbol = symbol.toLowerCase();
+        this.interval = interval;
+        this.onUpdate = onUpdate;
+        this.ws = null;
+    }
+
+    connect() {
+        const streamName = `${this.symbol}@kline_${this.interval}`;
+        this.ws = new WebSocket(`${this.baseUrl}/${streamName}`);
+
+        this.ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.e === 'kline') {
+                const kline = data.k;
+                const candlestick = {
+                    Date: kline.t,
+                    Open: parseFloat(kline.o),
+                    High: parseFloat(kline.h),
+                    Low: parseFloat(kline.l),
+                    Close: parseFloat(kline.c),
+                    Volume: parseFloat(kline.v)
+                };
+                this.onUpdate(candlestick);
+            }
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+
+        this.ws.onclose = () => {
+            console.log('WebSocket connection closed');
+            // Implement reconnection logic if needed
+            setTimeout(() => this.connect(), 5000);
+        };
+    }
+
+    disconnect() {
+        if (this.ws) {
+            this.ws.close();
+        }
+    }
+}
+```
+
+#### 2. Integration with AmCharts
+```javascript
+// Example usage in chart class
+class BTCChart {
+    constructor() {
+        this.websocket = null;
+        // ... other initialization code
+    }
+
+    setupRealTimeUpdates() {
+        this.websocket = new BinanceWebSocket('BTCUSDT', '1m', (candlestick) => {
+            const lastDataItem = this.mainSeries.data.getIndex(this.mainSeries.data.length - 1);
+            
+            if (lastDataItem && lastDataItem.Date === candlestick.Date) {
+                // Update existing candle
+                this.mainSeries.data.setIndex(this.mainSeries.data.length - 1, candlestick);
+            } else {
+                // Add new candle
+                this.mainSeries.data.push(candlestick);
+            }
+        });
+        this.websocket.connect();
+    }
+
+    dispose() {
+        if (this.websocket) {
+            this.websocket.disconnect();
+        }
+        // ... other cleanup code
+    }
+}
+```
+
+### Error Handling and Rate Limiting
+
+#### 1. Rate Limit Implementation
+```javascript
+class RateLimiter {
+    constructor(maxRequests, timeWindow) {
+        this.maxRequests = maxRequests;
+        this.timeWindow = timeWindow;
+        this.requests = [];
+    }
+
+    async throttle() {
+        const now = Date.now();
+        this.requests = this.requests.filter(time => now - time < this.timeWindow);
+        
+        if (this.requests.length >= this.maxRequests) {
+            const oldestRequest = this.requests[0];
+            const waitTime = this.timeWindow - (now - oldestRequest);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+        }
+        
+        this.requests.push(now);
+    }
+}
+
+// Usage in BinanceHandler
+class BinanceHandler {
+    constructor() {
+        // Binance allows 1200 requests per minute
+        this.rateLimiter = new RateLimiter(1000, 60000);
+        // ... other initialization code
+    }
+
+    async makeRequest(endpoint, params = {}) {
+        await this.rateLimiter.throttle();
+        // ... rest of makeRequest implementation
+    }
+}
+```
+
+#### 2. Error Recovery
+```javascript
+class BinanceHandler {
+    async getKlinesWithRetry(symbol, timeframe, limit = 500, maxRetries = 3) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                return await this.getKlines(symbol, timeframe, limit);
+            } catch (error) {
+                if (attempt === maxRetries) throw error;
+                
+                const waitTime = Math.min(1000 * Math.pow(2, attempt), 10000);
+                await new Promise(resolve => setTimeout(resolve, waitTime));
+            }
+        }
+    }
+}
+```
+
+### Best Practices
+
+1. **Data Management**
+   - Cache frequently accessed data
+   - Implement proper error boundaries
+   - Use WebSocket for real-time updates
+   - Handle reconnection scenarios
+
+2. **Performance**
+   - Limit initial data load (500-1000 candles)
+   - Implement pagination for historical data
+   - Use proper data structures for quick updates
+
+3. **Error Handling**
+   - Implement retry mechanisms
+   - Handle network errors gracefully
+   - Provide user feedback for API issues
+
+4. **Security**
+   - Always use proxy server to hide API keys
+   - Implement rate limiting
+   - Validate all input data
+
+### Troubleshooting
+
+1. **CORS Issues**
+   - Ensure proxy server is properly configured
+   - Check server error logs
+   - Verify proxy endpoints match client configuration
+
+2. **Rate Limiting**
+   - Monitor API usage
+   - Implement proper throttling
+   - Cache frequently accessed data
+
+3. **WebSocket Issues**
+   - Implement reconnection logic
+   - Handle connection drops
+   - Monitor connection state
+
+For more details on Binance API endpoints and WebSocket streams, refer to the [official Binance API documentation](https://binance-docs.github.io/apidocs/).
+
 ## Technology Stack
 
 ### Frontend

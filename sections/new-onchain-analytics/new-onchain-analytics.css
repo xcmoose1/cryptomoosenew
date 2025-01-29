@@ -1,0 +1,213 @@
+.onchain-analytics-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    height: 100%;
+}
+
+/* Controls Panel */
+.controls-panel {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--panel-bg);
+    border-radius: 8px;
+}
+
+.asset-select,
+.timeframe-select {
+    flex: 1;
+}
+
+select {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+/* Dashboard Grid */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.card {
+    background: var(--panel-bg);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* Network Health */
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.metric {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+}
+
+.metric .label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.metric .value {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.metric .change {
+    font-size: 0.9rem;
+}
+
+.change.positive {
+    color: var(--success-color);
+}
+
+.change.negative {
+    color: var(--danger-color);
+}
+
+/* Transaction Analysis */
+.transaction-analysis,
+.whale-activity,
+.supply-distribution {
+    height: 400px;
+}
+
+#transaction-chart,
+#whale-chart,
+#supply-chart {
+    height: 300px;
+}
+
+.transaction-stats,
+.supply-stats {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1rem;
+}
+
+.stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.stat .label {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.stat .value {
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+/* Whale Alerts */
+#whale-alerts {
+    margin-top: 1rem;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.whale-alert {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+/* Detailed Analysis */
+.detailed-analysis {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.fee-analysis,
+.utxo-distribution,
+.smart-contract-activity {
+    height: 350px;
+}
+
+#fee-chart,
+#utxo-chart,
+#contract-chart {
+    height: 250px;
+}
+
+/* Network Insights */
+.network-insights {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+}
+
+.mining-pools,
+.node-distribution {
+    height: 300px;
+}
+
+#mining-pool-chart,
+#node-map {
+    height: 250px;
+}
+
+/* Loading States */
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 8px;
+}
+
+.loading::after {
+    content: "";
+    width: 2rem;
+    height: 2rem;
+    border: 2px solid var(--border-color);
+    border-top: 2px solid var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .dashboard-grid,
+    .detailed-analysis,
+    .network-insights {
+        grid-template-columns: 1fr;
+    }
+
+    .controls-panel {
+        flex-direction: column;
+    }
+
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+}

@@ -106,6 +106,36 @@ router.get('/indicators/:pair', (req, res) => {
     }
 });
 
+// Get historical signals
+router.get('/api/signals/history', async (req, res) => {
+    try {
+        const { type, limit, startDate, endDate } = req.query;
+        
+        // Get historical signals
+        const signals = await signalsService.getHistoricalSignals({
+            type: type || 'all',
+            limit: parseInt(limit) || 100,
+            startDate: startDate || null,
+            endDate: endDate || null
+        });
+        
+        // Get signal stats
+        const stats = await signalsService.getSignalStats();
+        
+        res.json({
+            success: true,
+            signals,
+            stats
+        });
+    } catch (error) {
+        console.error('Error getting historical signals:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error getting historical signals'
+        });
+    }
+});
+
 // Add health check endpoint
 router.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy' });

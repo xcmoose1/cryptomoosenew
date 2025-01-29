@@ -1,0 +1,271 @@
+.traditional-markets-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+    height: 100%;
+}
+
+/* Controls Panel */
+.controls-panel {
+    display: flex;
+    gap: 1rem;
+    padding: 1rem;
+    background: var(--panel-bg);
+    border-radius: 8px;
+}
+
+.market-select,
+.timeframe-select {
+    flex: 1;
+}
+
+select {
+    width: 100%;
+    padding: 0.5rem;
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-primary);
+}
+
+/* Cards */
+.card {
+    background: var(--panel-bg);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+/* Market Overview */
+.market-overview {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 1rem;
+}
+
+/* Major Indices */
+.indices-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.index-card {
+    padding: 1rem;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+    transition: transform 0.3s ease;
+}
+
+.index-card:hover {
+    transform: translateY(-2px);
+}
+
+.index-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.index-name {
+    font-weight: bold;
+}
+
+.index-symbol {
+    color: var(--text-secondary);
+}
+
+.index-value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.index-change {
+    font-size: 0.9rem;
+}
+
+.index-change.positive {
+    color: var(--success-color);
+}
+
+.index-change.negative {
+    color: var(--danger-color);
+}
+
+/* Market Chart */
+.market-chart {
+    height: 500px;
+}
+
+.chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.chart-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.chart-type-btn {
+    padding: 0.5rem 1rem;
+    background: var(--secondary-bg);
+    border: none;
+    border-radius: 4px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.chart-type-btn.active {
+    background: var(--accent-color);
+}
+
+#main-chart {
+    height: 400px;
+}
+
+/* Market Details */
+.market-details {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+#forex-grid,
+#commodities-grid,
+#bonds-grid {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.market-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+}
+
+.market-name {
+    font-weight: bold;
+}
+
+.market-value {
+    text-align: right;
+}
+
+/* Market Analysis */
+.market-analysis {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+#correlation-matrix {
+    height: 300px;
+}
+
+#sector-treemap {
+    height: 300px;
+}
+
+.calendar-filters {
+    margin-bottom: 1rem;
+}
+
+#events-list {
+    height: 250px;
+    overflow-y: auto;
+}
+
+.event-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 1rem;
+    padding: 0.75rem;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.event-time {
+    color: var(--text-secondary);
+}
+
+.event-impact {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.impact-high {
+    background: var(--danger-color);
+}
+
+.impact-medium {
+    background: var(--warning-color);
+}
+
+.impact-low {
+    background: var(--success-color);
+}
+
+/* Market Intelligence */
+.market-intelligence {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+}
+
+.indicator-grid,
+.risk-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.indicator-item,
+.risk-item {
+    padding: 0.75rem;
+    background: var(--secondary-bg);
+    border-radius: 4px;
+}
+
+#sentiment-gauge {
+    height: 200px;
+    margin-bottom: 1rem;
+}
+
+#sentiment-summary {
+    text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+    .market-overview,
+    .market-details,
+    .market-analysis,
+    .market-intelligence {
+        grid-template-columns: 1fr;
+    }
+
+    .indices-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .controls-panel {
+        flex-direction: column;
+    }
+
+    .indicator-grid,
+    .risk-grid {
+        grid-template-columns: 1fr;
+    }
+}

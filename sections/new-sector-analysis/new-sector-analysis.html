@@ -1,0 +1,72 @@
+<!-- Sector Analysis Section -->
+<div class="sector-analysis-container">
+    <!-- Controls -->
+    <div class="controls-panel">
+        <div class="timeframe-select">
+            <select id="sector-timeframe">
+                <option value="4h">4H</option>
+                <option value="8h">8H</option>
+                <option value="1d">1D</option>
+            </select>
+        </div>
+        <div class="view-options">
+            <button class="view-btn active" data-view="performance">Performance</button>
+            <button class="view-btn" data-view="dominance">Dominance</button>
+            <button class="view-btn" data-view="flow">Capital Flow</button>
+        </div>
+    </div>
+
+    <!-- Main Visualization -->
+    <div class="main-visualization">
+        <div id="sector-chart"></div>
+    </div>
+
+    <!-- Sector Details -->
+    <div class="sector-details">
+        <!-- Performance Rankings -->
+        <div class="performance-rankings card">
+            <h3>Sector Performance</h3>
+            <div class="ranking-filters">
+                <button class="time-btn active" data-time="4h">4H</button>
+                <button class="time-btn" data-time="24h">24H</button>
+                <button class="time-btn" data-time="7d">7D</button>
+            </div>
+            <div id="performance-list"></div>
+        </div>
+
+        <!-- Capital Flow -->
+        <div class="capital-flow card">
+            <h3>Capital Flow Analysis</h3>
+            <div id="flow-chart"></div>
+            <div id="flow-stats"></div>
+        </div>
+
+        <!-- Sector Dominance -->
+        <div class="sector-dominance card">
+            <h3>Market Dominance</h3>
+            <div id="dominance-chart"></div>
+            <div id="dominance-trends"></div>
+        </div>
+    </div>
+
+    <!-- Sector Intelligence -->
+    <div class="sector-intelligence">
+        <!-- Rotation Analysis -->
+        <div class="rotation-analysis card">
+            <h3>Sector Rotation</h3>
+            <div id="rotation-analysis"></div>
+        </div>
+
+        <!-- Trend Analysis -->
+        <div class="trend-analysis card">
+            <h3>Trend Analysis</h3>
+            <div id="trend-analysis"></div>
+        </div>
+
+        <!-- Correlation Analysis -->
+        <div class="correlation-analysis card">
+            <h3>Cross-Sector Correlation</h3>
+            <div id="correlation-analysis"></div>
+        </div>
+    </div>
+</div>

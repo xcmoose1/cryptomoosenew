@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple BTC/USDT Chart</title>
+    <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/xy.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+
+    <script>
+        am5.addLicense("AM5S-5602-4210-7362-8604");
+    </script>
+
+    <style>
+        #chartdiv {
+            width: 100%;
+            height: 500px;
+            background-color: #1a1a1a;
+        }
+        body {
+            background-color: #1a1a1a;
+            margin: 0;
+            padding: 20px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h2>BTC/USDT Chart</h2>
+    <div id="chartdiv"></div>
+
+    <script type="module">
+        import { binanceHandler } from '/js/config/binance-config.js';
+
+        async function loadChart() {
+            try {
+                // Create root and configure
+                var root = am5.Root.new("chartdiv");
+                root.setThemes([
+                    am5themes_Dark.new(root),
+                    am5themes_Animated.new(root)
+                ]);
+
+                // Create chart
+                var chart = root.container.children.push(am5xy.XYChart.new(root, {
+                    panX: true,
+                    panY: true,
+                    wheelX: "panX",
+                    wheelY: "zoomX",
+                    layout: root.verticalLayout,
+                    pinchZoomX: true
+                }));
+
+                // Create axes
+                var xAxis = chart.xAxes.push(am5xy.DateAxis.new(root, {
+                    baseInterval: { timeUnit: "minute", count: 1 },
+                    renderer: am5xy.AxisRendererX.new(root, {
+                        minGridDistance: 50,
+                        pan: "zoom"
+                    })
+                }));
+
+                var yAxis = chart.yAxes.push(am5xy.ValueAxis.new(root, {
+                    renderer: am5xy.AxisRendererY.new(root, {
+                        pan: "zoom"
+                    })
+                }));
+
+                // Add series
+                var series = chart.series.push(am5xy.CandlestickSeries.new(root, {
+                    name: "BTCUSDT",
+                    xAxis: xAxis,
+                    yAxis: yAxis,
+                    valueYField: "Close",
+                    openValueYField: "Open",
+                    lowValueYField: "Low",
+                    highValueYField: "High",
+                    valueXField: "Date",
+                    tooltip: am5.Tooltip.new(root, {
+                        pointerOrientation: "horizontal",
+                        labelText: "[bold]{name}[/]\nOpen: {openValueY}\nHigh: {highValueY}\nLow: {lowValueY}\nClose: {valueY}"
+                    })
+                }));
+
+                // Set series colors
+                series.columns.template.states.create("riseFromOpen", {
+                    fill: am5.color(0x00ff00),
+                    stroke: am5.color(0x00ff00)
+                });
+
+                series.columns.template.states.create("dropFromOpen", {
+                    fill: am5.color(0xff0000),
+                    stroke: am5.color(0xff0000)
+                });
+
+                // Add cursor
+                chart.set("cursor", am5xy.XYCursor.new(root, {
+                    behavior: "none",
+                    xAxis: xAxis,
+                    yAxis: yAxis
+                }));
+
+                // Add scrollbar
+                chart.set("scrollbarX", am5.Scrollbar.new(root, {
+                    orientation: "horizontal"
+                }));
+
+                // Load data
+                console.log('Fetching data from Binance...');
+                const klines = await binanceHandler.getKlines('BTCUSDT', '1h');
+                console.log('Received klines:', klines.length);
+
+                const data = klines.map(k => ({
+                    Date: k[0],
+                    Open: parseFloat(k[1]),
+                    High: parseFloat(k[2]),
+                    Low: parseFloat(k[3]),
+                    Close: parseFloat(k[4])
+                }));
+
+                console.log('First data point:', data[0]);
+                console.log('Last data point:', data[data.length - 1]);
+
+                // Set data to series
+                series.data.setAll(data);
+
+                // Make stuff animate on load
+                series.appear(1000);
+                chart.appear(1000, 100);
+
+            } catch (error) {
+                console.error('Error loading chart:', error);
+            }
+        }
+
+        // Start when document is ready
+        document.addEventListener('DOMContentLoaded', loadChart);
+    </script>
+</body>
+</html>

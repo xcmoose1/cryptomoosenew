@@ -1,0 +1,135 @@
+<!-- Market Intelligence Section -->
+<div class="market-intelligence-container">
+    <!-- Controls -->
+    <div class="controls-panel">
+        <div class="search-bar">
+            <input type="text" id="intelligence-search" placeholder="Search assets, events, or keywords...">
+            <button id="search-btn"><i class="fas fa-search"></i></button>
+        </div>
+        <div class="filter-options">
+            <select id="category-filter">
+                <option value="all">All Categories</option>
+                <option value="news">News</option>
+                <option value="social">Social</option>
+                <option value="events">Events</option>
+                <option value="research">Research</option>
+            </select>
+            <select id="timeframe-filter">
+                <option value="24h">24H</option>
+                <option value="7d">7D</option>
+                <option value="30d">30D</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="intelligence-content">
+        <!-- Sentiment Overview -->
+        <div class="sentiment-overview card">
+            <h3>Market Sentiment Overview</h3>
+            <div class="sentiment-grid">
+                <div class="sentiment-chart">
+                    <div id="sentiment-gauge"></div>
+                </div>
+                <div class="sentiment-metrics">
+                    <div class="metric">
+                        <span class="label">News Sentiment</span>
+                        <span class="value" id="news-sentiment">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Social Sentiment</span>
+                        <span class="value" id="social-sentiment">Loading...</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Market Mood</span>
+                        <span class="value" id="market-mood">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- News Analysis -->
+        <div class="news-analysis card">
+            <h3>News Analysis</h3>
+            <div id="news-impact-chart"></div>
+            <div class="news-feed" id="news-feed">
+                <!-- News items will be dynamically added here -->
+            </div>
+        </div>
+
+        <!-- Social Intelligence -->
+        <div class="social-intelligence card">
+            <h3>Social Intelligence</h3>
+            <div class="social-tabs">
+                <button class="tab-btn active" data-tab="twitter">Twitter</button>
+                <button class="tab-btn" data-tab="reddit">Reddit</button>
+                <button class="tab-btn" data-tab="telegram">Telegram</button>
+            </div>
+            <div class="social-content">
+                <div id="social-volume-chart"></div>
+                <div id="trending-topics"></div>
+            </div>
+        </div>
+
+        <!-- Event Calendar -->
+        <div class="event-calendar card">
+            <h3>Event Calendar</h3>
+            <div class="calendar-controls">
+                <button id="prev-month"><i class="fas fa-chevron-left"></i></button>
+                <span id="current-month">January 2025</span>
+                <button id="next-month"><i class="fas fa-chevron-right"></i></button>
+            </div>
+            <div id="calendar-grid"></div>
+            <div id="upcoming-events"></div>
+        </div>
+    </div>
+
+    <!-- Market Research -->
+    <div class="market-research">
+        <!-- Research Reports -->
+        <div class="research-reports card">
+            <h3>Research Reports</h3>
+            <div class="report-filters">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="technical">Technical</button>
+                <button class="filter-btn" data-filter="fundamental">Fundamental</button>
+                <button class="filter-btn" data-filter="regulatory">Regulatory</button>
+            </div>
+            <div id="reports-list"></div>
+        </div>
+
+        <!-- Market Insights -->
+        <div class="market-insights card">
+            <h3>Market Insights</h3>
+            <div id="insights-chart"></div>
+            <div id="key-takeaways"></div>
+        </div>
+
+        <!-- Regulatory Tracker -->
+        <div class="regulatory-tracker card">
+            <h3>Regulatory Updates</h3>
+            <div id="regulatory-timeline"></div>
+        </div>
+    </div>
+
+    <!-- AI Analysis -->
+    <div class="ai-analysis card">
+        <h3>AI Market Analysis</h3>
+        <div class="ai-insights">
+            <div class="insight-card market-prediction">
+                <h4>Market Prediction</h4>
+                <div id="prediction-chart"></div>
+                <div id="prediction-summary"></div>
+            </div>
+            <div class="insight-card risk-analysis">
+                <h4>Risk Analysis</h4>
+                <div id="risk-gauge"></div>
+                <div id="risk-factors"></div>
+            </div>
+            <div class="insight-card opportunity-scanner">
+                <h4>Opportunity Scanner</h4>
+                <div id="opportunity-list"></div>
+            </div>
+        </div>
+    </div>
+</div>

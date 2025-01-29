@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC/USDT Chart</title>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .controls {
+            margin-bottom: 20px;
+        }
+        .timeframe-btn, .indicator-btn {
+            background: #2a2a2a;
+            border: 1px solid #3a3a3a;
+            color: #ffffff;
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .timeframe-btn.active, .indicator-btn.active {
+            background: #4a4a4a;
+            border-color: #5a5a5a;
+        }
+        #chartdiv {
+            width: 100%;
+            height: 600px;
+            background-color: #1a1a1a;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="timeframes">
+            <button class="timeframe-btn active" data-timeframe="1h">1H</button>
+            <button class="timeframe-btn" data-timeframe="4h">4H</button>
+            <button class="timeframe-btn" data-timeframe="1d">1D</button>
+        </div>
+        <div class="indicators" style="margin-top: 10px;">
+            <button class="indicator-btn" data-indicator="ma">Moving Average</button>
+            <button class="indicator-btn" data-indicator="rsi">RSI</button>
+            <button class="indicator-btn" data-indicator="bb">Bollinger Bands</button>
+        </div>
+    </div>
+    <div id="chartdiv"></div>
+    <div id="section-content"></div>
+
+    <!-- Load AmCharts -->
+    <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/xy.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/stock.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/themes/Dark.js"></script>
+    <script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+
+    <!-- Import styles -->
+    <link rel="stylesheet" href="/sections/new-volume-profile/new-volume-profile.css">
+
+    <!-- Initialize chart after scripts are loaded -->
+    <script type="module">
+        import { binanceHandler } from '/js/config/binance-config.js';
+        import { initializeVolumeProfile } from '/sections/new-volume-profile/new-volume-profile.js';
+        import { SectionLoader } from '/js/section-loader.js';
+
+        // Add license
+        am5.addLicense("AM5S-5602-4210-7362-8604");
+
+        class BTCChart {
+            constructor() {
+                this.currentTimeframe = '1h';
+                this.activeIndicators = new Set();
+                this.root = null;
+                this.chart = null;
+                this.mainSeries = null;
+                this.indicators = {};
+            }
+
+            async init() {
+                try {
+                    console.log('Initializing chart...');
+                    
+                    // Create root
+                    this.root = am5.Root.new("chartdiv");
+                    
+                    // Set themes
+                    this.root.setThemes([
+                        am5themes_Dark.new(this.root),
+                        am5themes_Animated.new(this.root)
+                    ]);
+
+                    // Create chart
+                    this.chart = this.root.container.children.push(
+                        am5xy.XYChart.new(this.root, {
+                            panX: true,
+                            panY: true,
+                            wheelX: "panX",
+                            wheelY: "zoomX",
+                        })
+                    );
+
+                    // Create axes
+                    const xAxis = this.chart.xAxes.push(
+                        am5xy.DateAxis.new(this.root, {
+                            baseInterval: { timeUnit: "minute", count: 1 },
+                            renderer: am5xy.AxisRendererX.new(this.root, {}),
+                            tooltip: am5.Tooltip.new(this.root, {})
+                        })
+                    );
+
+                    const yAxis = this.chart.yAxes.push(
+                        am5xy.ValueAxis.new(this.root, {
+                            renderer: am5xy.AxisRendererY.new(this.root, {})
+                        })
+                    );
+
+                    // Add series
+                    this.mainSeries = this.chart.series.push(
+                        am5xy.CandlestickSeries.new(this.root, {
+                            name: "BTCUSDT",
+                            xAxis: xAxis,
+                            yAxis: yAxis,
+                            openValueYField: "open",
+                            highValueYField: "high",
+                            lowValueYField: "low",
+                            valueYField: "close",
+                            valueXField: "date",
+                            tooltip: am5.Tooltip.new(this.root, {
+                                pointerOrientation: "horizontal",
+                                labelText: "Open: {openValueY}\nHigh: {highValueY}\nLow: {lowValueY}\nClose: {valueY}"
+                            })
+                        })
+                    );
+
+                    // Enable chart cursor
+                    this.chart.set("cursor", am5xy.XYCursor.new(this.root, {
+                        xAxis: xAxis,
+                        yAxis: yAxis,
+                        behavior: "none"
+                    }));
+
+                    // Enable scrollbar
+                    const scrollbar = this.chart.set("scrollbarX", am5.Scrollbar.new(this.root, {
+                        orientation: "horizontal"
+                    }));
+
+                    // Load initial data
+                    await this.loadData();
+                    
+                    // Setup event listeners
+                    this.setupEventListeners();
+                    
+                    console.log('Chart initialized');
+                } catch (error) {
+                    console.error('Error initializing chart:', error);
+                }
+            }
+
+            async loadData() {
+                try {
+                    console.log('Loading data...');
+                    const klines = await binanceHandler.getKlines('BTCUSDT', this.currentTimeframe);
+                    
+                    const data = klines.map(k => ({
+                        date: k[0],
+                        open: parseFloat(k[1]),
+                        high: parseFloat(k[2]),
+                        low: parseFloat(k[3]),
+                        close: parseFloat(k[4])
+                    }));
+
+                    this.mainSeries.data.setAll(data);
+                    console.log('Data loaded:', data.length, 'candles');
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                }
+            }
+
+            setupEventListeners() {
+                // Timeframe buttons
+                document.querySelectorAll('.timeframe-btn').forEach(btn => {
+                    btn.addEventListener('click', async () => {
+                        // Update active state
+                        document.querySelectorAll('.timeframe-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        
+                        // Update timeframe and reload data
+                        this.currentTimeframe = btn.dataset.timeframe;
+                        await this.loadData();
+                    });
+                });
+
+                // Indicator buttons
+                document.querySelectorAll('.indicator-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const indicator = btn.dataset.indicator;
+                        if (btn.classList.contains('active')) {
+                            btn.classList.remove('active');
+                            this.removeIndicator(indicator);
+                        } else {
+                            btn.classList.add('active');
+                            this.addIndicator(indicator);
+                        }
+                    });
+                });
+            }
+
+            addIndicator(indicator) {
+                // TODO: Implement indicators
+                console.log('Adding indicator:', indicator);
+            }
+
+            removeIndicator(indicator) {
+                // TODO: Implement indicators
+                console.log('Removing indicator:', indicator);
+            }
+
+            dispose() {
+                if (this.root) {
+                    this.root.dispose();
+                }
+            }
+        }
+
+        // Wait for DOM and scripts to load
+        window.addEventListener('load', async () => {
+            try {
+                console.log('Window loaded, initializing components...');
+                
+                // Initialize main chart
+                const btcChart = new BTCChart();
+                await btcChart.init();
+                btcChart.setupEventListeners();
+                
+                // Load and initialize volume profile section
+                console.log('Loading volume profile section...');
+                const sectionLoader = new SectionLoader();
+                await sectionLoader.loadSection('new-volume-profile');
+                
+                // Initialize volume profile
+                console.log('Initializing volume profile section...');
+                await initializeVolumeProfile();
+                
+                console.log('All components initialized');
+            } catch (error) {
+                console.error('Error during initialization:', error);
+            }
+        });
+    </script>
+</body>
+</html>

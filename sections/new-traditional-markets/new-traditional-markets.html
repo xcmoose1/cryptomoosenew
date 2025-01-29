@@ -1,0 +1,148 @@
+<!-- Traditional Markets Section -->
+<div class="traditional-markets-container">
+    <!-- Controls -->
+    <div class="controls-panel">
+        <div class="market-select">
+            <select id="market-selector">
+                <option value="stocks">Stock Markets</option>
+                <option value="forex">Forex</option>
+                <option value="commodities">Commodities</option>
+                <option value="bonds">Bonds</option>
+            </select>
+        </div>
+        <div class="timeframe-select">
+            <select id="timeframe-selector">
+                <option value="1d">1D</option>
+                <option value="5d">5D</option>
+                <option value="1m">1M</option>
+                <option value="3m">3M</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Market Overview -->
+    <div class="market-overview">
+        <!-- Major Indices -->
+        <div class="major-indices card">
+            <h3>Major Indices</h3>
+            <div class="indices-grid">
+                <div class="index-card" id="sp500">
+                    <div class="index-header">
+                        <span class="index-name">S&P 500</span>
+                        <span class="index-symbol">SPX</span>
+                    </div>
+                    <div class="index-value">Loading...</div>
+                    <div class="index-change">0.00%</div>
+                </div>
+                <div class="index-card" id="nasdaq">
+                    <div class="index-header">
+                        <span class="index-name">NASDAQ</span>
+                        <span class="index-symbol">IXIC</span>
+                    </div>
+                    <div class="index-value">Loading...</div>
+                    <div class="index-change">0.00%</div>
+                </div>
+                <div class="index-card" id="dowjones">
+                    <div class="index-header">
+                        <span class="index-name">Dow Jones</span>
+                        <span class="index-symbol">DJI</span>
+                    </div>
+                    <div class="index-value">Loading...</div>
+                    <div class="index-change">0.00%</div>
+                </div>
+                <div class="index-card" id="ftse">
+                    <div class="index-header">
+                        <span class="index-name">FTSE 100</span>
+                        <span class="index-symbol">UKX</span>
+                    </div>
+                    <div class="index-value">Loading...</div>
+                    <div class="index-change">0.00%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Market Chart -->
+        <div class="market-chart card">
+            <div class="chart-header">
+                <h3>Market Performance</h3>
+                <div class="chart-controls">
+                    <button class="chart-type-btn active" data-type="line">Line</button>
+                    <button class="chart-type-btn" data-type="candle">Candle</button>
+                </div>
+            </div>
+            <div id="main-chart"></div>
+        </div>
+    </div>
+
+    <!-- Market Details -->
+    <div class="market-details">
+        <!-- Forex Overview -->
+        <div class="forex-overview card">
+            <h3>Major Currency Pairs</h3>
+            <div id="forex-grid"></div>
+        </div>
+
+        <!-- Commodities Overview -->
+        <div class="commodities-overview card">
+            <h3>Key Commodities</h3>
+            <div id="commodities-grid"></div>
+        </div>
+
+        <!-- Bond Markets -->
+        <div class="bond-markets card">
+            <h3>Government Bonds</h3>
+            <div id="bonds-grid"></div>
+        </div>
+    </div>
+
+    <!-- Market Analysis -->
+    <div class="market-analysis">
+        <!-- Correlation Analysis -->
+        <div class="correlation-analysis card">
+            <h3>Cross-Market Correlation</h3>
+            <div id="correlation-matrix"></div>
+        </div>
+
+        <!-- Market Sectors -->
+        <div class="market-sectors card">
+            <h3>Sector Performance</h3>
+            <div id="sector-treemap"></div>
+        </div>
+
+        <!-- Economic Calendar -->
+        <div class="economic-calendar card">
+            <h3>Economic Events</h3>
+            <div class="calendar-filters">
+                <select id="importance-filter">
+                    <option value="all">All Events</option>
+                    <option value="high">High Impact</option>
+                    <option value="medium">Medium Impact</option>
+                    <option value="low">Low Impact</option>
+                </select>
+            </div>
+            <div id="events-list"></div>
+        </div>
+    </div>
+
+    <!-- Market Intelligence -->
+    <div class="market-intelligence">
+        <!-- Technical Analysis -->
+        <div class="technical-analysis card">
+            <h3>Technical Overview</h3>
+            <div class="indicator-grid" id="technical-indicators"></div>
+        </div>
+
+        <!-- Market Sentiment -->
+        <div class="market-sentiment card">
+            <h3>Market Sentiment</h3>
+            <div id="sentiment-gauge"></div>
+            <div id="sentiment-summary"></div>
+        </div>
+
+        <!-- Risk Analysis -->
+        <div class="risk-analysis card">
+            <h3>Risk Metrics</h3>
+            <div class="risk-grid" id="risk-indicators"></div>
+        </div>
+    </div>
+</div>

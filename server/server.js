@@ -46,10 +46,12 @@ import { getAllRegulatoryData, getHighRiskAlerts } from '../api/regulatory-track
 import authRoutes from '../routes/auth.js';
 import userRoutes from '../routes/user.js';
 import aiRoutes from '../routes/ai-insights.js';
+import aiAnalysisRouter from '../routes/ai-analysis.js';
 import { HTXDailyService } from '../services/htx-daily.service.js';
 import signalsRouter from '../signals/routes/signals-routes.js';
 import contentRouter from './routes/content-routes.js';
 import marketOverviewRouter from '../routes/market-overview.js';
+import binanceProxyRouter from '../routes/binance-proxy.js';
 
 // Rate Limiter implementation
 class RateLimiter {
@@ -115,7 +117,11 @@ async function initializeServices() {
 }
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -157,6 +163,8 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/signals', signalsRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/market-overview', marketOverviewRouter);
+app.use('/api/new-ai-analysis', aiAnalysisRouter);
+app.use('/api/binance', binanceProxyRouter);
 
 // Create a separate instance for daily updates
 const htxDailyService = new HTXDailyService();
@@ -181,6 +189,9 @@ app.use((req, res, next) => {
 
 // Serve images
 app.use('/images', express.static(path.join(__dirname, '..', 'images')));
+
+// Serve section files
+app.use('/sections', express.static(path.join(__dirname, '..', 'sections')));
 
 // Root route handler
 app.get('/', (req, res) => {

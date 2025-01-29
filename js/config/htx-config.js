@@ -4,8 +4,8 @@
 // Configuration object for HTX API
 export const HTX_CONFIG = {
     // Base URLs
-    WS_URL: 'wss://api.htx.com/ws',
-    REST_URL: 'https://api.htx.com',
+    WS_URL: 'wss://api.huobi.pro/ws',
+    REST_URL: 'https://api.huobi.pro',
     
     // Market data configuration
     MARKET_CONFIG: {
@@ -89,7 +89,7 @@ export const HTX_INTERVALS = {
 
 // Format functions
 export function formatSymbol(symbol) {
-    return symbol.toLowerCase() + (symbol.endsWith('usdt') ? '' : 'usdt');
+    return symbol.toLowerCase();
 }
 
 export function formatKlineData(data) {
@@ -109,7 +109,7 @@ export function formatKlineData(data) {
 
 export class HTXHandler {
     constructor() {
-        this.baseUrl = HTX_CONFIG.REST_URL;
+        this.baseUrl = 'https://api.huobi.pro';
         this.apiKey = '';
         this.apiSecret = '';
     }
@@ -130,15 +130,20 @@ export class HTXHandler {
     }
 
     async makeRequest(endpoint, params = {}) {
-        const url = new URL(this.baseUrl + endpoint);
+        const url = new URL(endpoint, this.baseUrl);
         Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+        console.log('Making request to:', url.toString());
 
         try {
+            console.log('Fetching data...');
             const response = await fetch(url);
+            console.log('Response status:', response.status);
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            return await response.json();
+            const data = await response.json();
+            console.log('Raw API response:', data);
+            return data;
         } catch (error) {
             console.error('API request failed:', error);
             throw error;
@@ -147,40 +152,56 @@ export class HTXHandler {
 
     async getKlines(symbol, period, size = 500) {
         try {
+            console.log('Getting klines for:', { symbol, period, size });
             const params = {
-                symbol: formatSymbol(symbol),
-                period: this.timeframeToPeriod(period),
+                symbol: symbol,
+                period: period,
                 size: size
             };
+            console.log('Request params:', params);
             
-            const data = await this.makeRequest(HTX_CONFIG.ENDPOINTS.MARKET.KLINE, params);
-            if (data.status === 'ok' && data.data) {
-                return formatKlineData(data.data);
+            const endpoint = '/market/history/kline';
+            console.log('Using endpoint:', endpoint);
+            const response = await this.makeRequest(endpoint, params);
+            console.log('API Response:', response);
+            
+            if (response && response.status === 'ok' && Array.isArray(response.data)) {
+                // Sort data by timestamp ascending
+                const sortedData = response.data.sort((a, b) => a.id - b.id);
+                const formattedData = sortedData.map(item => ({
+                    date: new Date(item.id * 1000), // Convert timestamp to Date
+                    open: parseFloat(item.open),
+                    high: parseFloat(item.high),
+                    low: parseFloat(item.low),
+                    close: parseFloat(item.close),
+                    volume: parseFloat(item.vol || item.amount || 0)
+                }));
+                console.log('First data point:', formattedData[0]);
+                console.log('Last data point:', formattedData[formattedData.length - 1]);
+                return formattedData;
+            } else {
+                console.error('Invalid response structure:', response);
+                throw new Error('Invalid kline data received');
             }
-            throw new Error('Invalid kline data received');
         } catch (error) {
             console.error('Failed to fetch klines:', error);
             throw error;
         }
     }
 
+    formatSymbol(symbol) {
+        return symbol.toLowerCase();
+    }
+
     timeframeToPeriod(timeframe) {
         const mapping = {
-            '1m': '1min',
-            '3m': '3min',
-            '5m': '5min',
-            '15m': '15min',
-            '30m': '30min',
             '1h': '60min',
-            '2h': '120min',
             '4h': '4hour',
-            '6h': '6hour',
-            '12h': '12hour',
-            '1d': '1day',
-            '1w': '1week',
-            '1M': '1mon'
+            '1d': '1day'
         };
-        return mapping[timeframe] || timeframe;
+        const period = mapping[timeframe];
+        console.log('Mapped timeframe', timeframe, 'to period:', period);
+        return period || '60min';
     }
 }
 

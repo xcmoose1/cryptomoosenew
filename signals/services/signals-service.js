@@ -2,6 +2,9 @@ import { SIGNALS_CONFIG } from '../config/signals-config.js';
 import { RSI, MACD, EMA, SMA } from 'technicalindicators';
 import { createTelegramService } from './telegram-service.js';
 import pako from 'pako';
+import WebSocket from 'ws';
+import fs from 'fs/promises';
+import path from 'path';
 
 export class SignalsService {
     constructor() {
@@ -18,23 +21,335 @@ export class SignalsService {
         this.indicators = new Map();
         this.lastSignals = new Map();
         this.telegramService = null;
+        this.initializingPairs = new Set();
+        this.subscribedPairs = new Set();
+        this.pingInterval = null;
+        this.signalHistoryFile = path.join(process.cwd(), 'signals', 'data', 'signals-history.json');
+        this.signalHistory = { signals: [], lastUpdate: new Date().toISOString() };
+        this.trackRecordFile = path.join(process.cwd(), 'signals', 'data', 'track-record.json');
+        this.trackRecord = {
+            totalSignals: 0,
+            wins: 0,
+            losses: 0,
+            activeSignals: [],
+            completedSignals: [],
+            lastUpdate: new Date().toISOString()
+        };
+        
+        // List of all monitored pairs
+        this.monitoredPairs = [
+            'BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'XRP/USDT', 'SOL/USDT', 
+            'ADA/USDT', 'AVAX/USDT', 'DOT/USDT', 'MATIC/USDT', 'LINK/USDT',
+            'UNI/USDT', 'ATOM/USDT', 'LTC/USDT', 'ETC/USDT', 'XLM/USDT',
+            'ALGO/USDT', 'NEAR/USDT', 'FTM/USDT', 'SAND/USDT', 'MANA/USDT',
+            'AAVE/USDT', 'GRT/USDT', 'SNX/USDT', 'CRV/USDT'
+        ];
     }
 
     async initialize() {
         try {
+            console.log('\n🔄 Initializing SignalsService...');
+            
+            // Load signal history and track record
+            await Promise.all([
+                this.loadSignalHistory(),
+                this.loadTrackRecord()
+            ]);
+            
+            // Initialize TelegramService
+            this.telegramService = createTelegramService();
+            
+            // Setup WebSocket connection
             await this.setupWebSocket();
-            console.log('SignalsService initialized successfully');
+            
+            // Start processing pairs
+            await this.startBatchProcessing();
+            
+            console.log('\n✅ SignalsService initialized successfully');
+            return true;
         } catch (error) {
             console.error('Error initializing SignalsService:', error);
+            return false;
+        }
+    }
+
+    async loadSignalHistory() {
+        try {
+            const data = await fs.readFile(this.signalHistoryFile, 'utf8');
+            this.signalHistory = JSON.parse(data);
+            console.log(`📚 Loaded ${this.signalHistory.signals.length} historical signals`);
+        } catch (error) {
+            console.log('No signal history found, starting fresh');
+            this.signalHistory = { signals: [], lastUpdate: new Date().toISOString() };
+            await this.saveSignalHistory();
+        }
+    }
+
+    async saveSignalHistory() {
+        try {
+            // Keep only the last 1000 signals to manage file size
+            if (this.signalHistory.signals.length > 1000) {
+                this.signalHistory.signals = this.signalHistory.signals.slice(-1000);
+            }
+            this.signalHistory.lastUpdate = new Date().toISOString();
+            await fs.writeFile(this.signalHistoryFile, JSON.stringify(this.signalHistory, null, 2));
+        } catch (error) {
+            console.error('Error saving signal history:', error);
+        }
+    }
+
+    async loadTrackRecord() {
+        try {
+            const data = await fs.readFile(this.trackRecordFile, 'utf8');
+            this.trackRecord = JSON.parse(data);
+            console.log(`📊 Loaded track record: ${this.trackRecord.wins} wins, ${this.trackRecord.losses} losses`);
+        } catch (error) {
+            console.log('No track record found, starting fresh');
+            await this.saveTrackRecord();
+        }
+    }
+
+    async saveTrackRecord() {
+        try {
+            this.trackRecord.lastUpdate = new Date().toISOString();
+            await fs.writeFile(this.trackRecordFile, JSON.stringify(this.trackRecord, null, 2));
+        } catch (error) {
+            console.error('Error saving track record:', error);
+        }
+    }
+
+    async updateSignalStatus(signalId, status, exitPrice) {
+        const signal = this.trackRecord.activeSignals.find(s => s.id === signalId);
+        if (!signal) return;
+
+        const entryPrice = parseFloat(signal.price);
+        const currentPrice = parseFloat(exitPrice);
+        const isLong = signal.type.toLowerCase() === 'buy' || signal.type.toLowerCase() === 'long';
+        
+        // Calculate profit/loss
+        let profitPercent;
+        if (isLong) {
+            profitPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+        } else {
+            profitPercent = ((entryPrice - currentPrice) / entryPrice) * 100;
+        }
+
+        // Update signal status
+        signal.status = status;
+        signal.exitPrice = exitPrice;
+        signal.profitPercent = profitPercent;
+        signal.completedAt = new Date().toISOString();
+
+        // Move to completed signals
+        this.trackRecord.activeSignals = this.trackRecord.activeSignals.filter(s => s.id !== signalId);
+        this.trackRecord.completedSignals.push(signal);
+
+        // Update stats
+        if (profitPercent > 0) {
+            this.trackRecord.wins++;
+        } else {
+            this.trackRecord.losses++;
+        }
+
+        await this.saveTrackRecord();
+        
+        // Broadcast update to clients
+        this.broadcastToClients({
+            type: 'signalUpdate',
+            data: {
+                signal,
+                trackRecord: this.getTrackRecordStats()
+            }
+        });
+    }
+
+    getTrackRecordStats() {
+        const total = this.trackRecord.wins + this.trackRecord.losses;
+        const winRate = total > 0 ? (this.trackRecord.wins / total) * 100 : 0;
+        
+        // Calculate average profit
+        const completedSignals = this.trackRecord.completedSignals;
+        const totalProfit = completedSignals.reduce((sum, signal) => sum + signal.profitPercent, 0);
+        const avgProfit = completedSignals.length > 0 ? totalProfit / completedSignals.length : 0;
+
+        return {
+            totalSignals: total,
+            wins: this.trackRecord.wins,
+            losses: this.trackRecord.losses,
+            winRate: winRate.toFixed(2),
+            avgProfit: avgProfit.toFixed(2),
+            activeSignals: this.trackRecord.activeSignals.length
+        };
+    }
+
+    async sendSignal(signal) {
+        try {
+            // Add timestamp and unique ID to signal
+            signal.timestamp = new Date().toISOString();
+            signal.id = `sig_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Format the signal message
+            const message = this.formatSignalMessage(signal.symbol, signal.type, signal.price, signal.trend, signal.rsi, signal.volumeRatio, signal.emaFast, signal.emaSlow, signal.volumeMA);
+            
+            // Add to active signals
+            this.trackRecord.activeSignals.push({
+                ...signal,
+                status: 'active',
+                message
+            });
+            this.trackRecord.totalSignals++;
+            await this.saveTrackRecord();
+            
+            // Store in history
+            this.signalHistory.signals.push({
+                ...signal,
+                message,
+                sentAt: signal.timestamp
+            });
+            await this.saveSignalHistory();
+            
+            // Send to Telegram if available
+            if (this.telegramService) {
+                await this.telegramService.sendMessage(message);
+            }
+            
+            // Broadcast to clients
+            this.broadcastToClients({
+                type: 'signal',
+                data: {
+                    ...signal,
+                    message,
+                    trackRecord: this.getTrackRecordStats()
+                }
+            });
+            
+            return true;
+        } catch (error) {
+            console.error('Error sending signal:', error);
+            return false;
+        }
+    }
+
+    async getHistoricalSignals({ type = 'all', limit = 100, startDate = null, endDate = null } = {}) {
+        try {
+            let signals = [...this.signalHistory.signals];
+            
+            // Apply filters
+            if (type !== 'all') {
+                signals = signals.filter(s => s.type.toLowerCase() === type.toLowerCase());
+            }
+            
+            if (startDate) {
+                signals = signals.filter(s => new Date(s.timestamp) >= new Date(startDate));
+            }
+            
+            if (endDate) {
+                signals = signals.filter(s => new Date(s.timestamp) <= new Date(endDate));
+            }
+            
+            // Sort by timestamp descending and limit results
+            return signals
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, limit);
+        } catch (error) {
+            console.error('Error getting historical signals:', error);
+            return [];
+        }
+    }
+
+    async getSignalStats() {
+        try {
+            const signals = this.signalHistory.signals;
+            const now = new Date();
+            const last24h = new Date(now - 24 * 60 * 60 * 1000);
+            const last7d = new Date(now - 7 * 24 * 60 * 60 * 1000);
+            
+            return {
+                total: signals.length,
+                last24h: signals.filter(s => new Date(s.timestamp) >= last24h).length,
+                last7d: signals.filter(s => new Date(s.timestamp) >= last7d).length,
+                byType: {
+                    buy: signals.filter(s => s.type.toLowerCase() === 'buy' || s.type.toLowerCase() === 'long').length,
+                    sell: signals.filter(s => s.type.toLowerCase() === 'sell' || s.type.toLowerCase() === 'short').length
+                }
+            };
+        } catch (error) {
+            console.error('Error getting signal stats:', error);
+            return null;
+        }
+    }
+
+    async setupWebSocket() {
+        try {
+            console.log('\n🔄 Setting up WebSocket connection...');
+            
+            // Close existing connection if any
+            if (this.ws) {
+                this.ws.terminate();
+                this.ws = null;
+            }
+            
+            return new Promise((resolve, reject) => {
+                try {
+                    this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
+                    
+                    // Set binary type to arraybuffer for pako inflation
+                    this.ws.binaryType = 'arraybuffer';
+                    
+                    this.ws.on('open', () => {
+                        console.log('✅ WebSocket connected');
+                        this.reconnectAttempts = 0;
+                        this.isInitialized = true;
+                        
+                        // Setup ping interval
+                        this.setupPingInterval();
+                        
+                        resolve();
+                    });
+                    
+                    this.ws.on('message', async (data) => {
+                        try {
+                            await this.handleWebSocketMessage(data);
+                        } catch (error) {
+                            console.error('Error handling WebSocket message:', error);
+                        }
+                    });
+                    
+                    this.ws.on('close', () => {
+                        console.log('WebSocket disconnected');
+                        this.isInitialized = false;
+                        if (this.pingInterval) {
+                            clearInterval(this.pingInterval);
+                        }
+                        this.handleReconnect();
+                    });
+                    
+                    this.ws.on('error', (error) => {
+                        console.error('WebSocket error:', error);
+                        reject(error);
+                    });
+                    
+                    // Set connection timeout
+                    setTimeout(() => {
+                        if (!this.isInitialized) {
+                            const error = new Error('WebSocket connection timeout');
+                            this.ws.terminate();
+                            reject(error);
+                        }
+                    }, 10000);
+                } catch (error) {
+                    console.error('Error creating WebSocket:', error);
+                    reject(error);
+                }
+            });
+        } catch (error) {
+            console.error('Error setting up WebSocket:', error);
             throw error;
         }
     }
 
     async initializeService() {
         try {
-            // Initialize TelegramService
-            this.telegramService = createTelegramService();
-            
             // Start status updates
             this.startStatusUpdates();
             
@@ -105,34 +420,66 @@ export class SignalsService {
 
     async fetchHistoricalData(symbol, limit = 500) {
         try {
-            console.log(`\n📊 Fetching ${limit} historical candles for ${symbol}...`);
+            const formattedSymbol = this.formatSymbol(symbol);
+            console.log(`\n📊 Fetching ${limit} historical candles for ${symbol} (${formattedSymbol})...`);
             
-            // Ensure we don't exceed API limits
-            const maxLimit = Math.min(limit, 1000); // HTX API limit
+            // Ensure we don't exceed API limits but get enough data
+            const maxLimit = Math.min(limit, 2000); // HTX API limit is 2000
             
-            const response = await fetch(`${SIGNALS_CONFIG.API_BASE_URL}/market/history/kline?symbol=${symbol.toLowerCase()}&period=1min&size=${maxLimit}`);
-            const data = await response.json();
+            // Add retry logic
+            let retries = 3;
+            let lastError;
             
-            if (data['status'] === 'ok' && Array.isArray(data.data)) {
-                // Sort candles from oldest to newest
-                const candles = data.data.reverse().map(candle => ({
-                    time: candle.id * 1000, // Convert to milliseconds
-                    open: candle.open,
-                    high: candle.high,
-                    low: candle.low,
-                    close: candle.close,
-                    volume: candle.vol
-                }));
+            while (retries > 0) {
+                try {
+                    // Use 1min klines for most accurate data
+                    const url = `${SIGNALS_CONFIG.REST_URL}/market/history/kline?symbol=${formattedSymbol}&period=1min&size=${maxLimit}`;
+                    console.log(`Fetching from: ${url}`);
+                    
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    if (data && data.status === 'ok' && Array.isArray(data.data) && data.data.length > 0) {
+                        // Sort candles from oldest to newest
+                        const candles = data.data.reverse().map(candle => ({
+                            time: candle.id * 1000, // Convert to milliseconds
+                            open: parseFloat(candle.open),
+                            high: parseFloat(candle.high),
+                            low: parseFloat(candle.low),
+                            close: parseFloat(candle.close),
+                            volume: parseFloat(candle.vol)
+                        }));
 
-                // Store in history
-                this.candleHistory.set(symbol, candles);
-                
-                console.log(`✅ Fetched ${candles.length} historical candles for ${symbol}`);
-                return candles;
-            } else {
-                console.error(`❌ Failed to fetch historical data for ${symbol}:`, data['err-msg'] || 'Unknown error');
-                return null;
+                        if (candles.length > 0) {
+                            console.log(`✅ Fetched ${candles.length} historical candles for ${symbol}`);
+                            // Verify we have enough data
+                            if (candles.length < Math.min(100, limit)) {
+                                throw new Error(`Insufficient candles received: ${candles.length}`);
+                            }
+                            // Store in history
+                            this.candleHistory.set(symbol, candles);
+                            return candles;
+                        } else {
+                            throw new Error('Received empty candles array');
+                        }
+                    } else {
+                        throw new Error(data['err-msg'] || 'Invalid response format');
+                    }
+                } catch (error) {
+                    lastError = error;
+                    retries--;
+                    if (retries > 0) {
+                        console.log(`Retrying fetch for ${symbol}, ${retries} attempts remaining...`);
+                        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+                    }
+                }
             }
+            
+            console.error(`❌ Failed to fetch historical data for ${symbol} after all retries:`, lastError);
+            return null;
         } catch (error) {
             console.error(`❌ Error fetching historical data for ${symbol}:`, error);
             return null;
@@ -141,73 +488,87 @@ export class SignalsService {
 
     async initializeIndicators(symbol) {
         try {
+            // Check if already initializing this pair
+            if (this.initializingPairs.has(symbol)) {
+                console.log(`Already initializing indicators for ${symbol}, skipping duplicate call`);
+                return true;
+            }
+            
+            // Mark as initializing
+            this.initializingPairs.add(symbol);
+            
             console.log(`\n📊 Initializing indicators for ${symbol}...`);
             
-            if (!this.candleHistory.has(symbol)) {
-                console.log(`No candle history for ${symbol}, fetching...`);
-                await this.fetchHistoricalData(symbol, Math.max(
-                    SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 2,
-                    SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 2,
-                    SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 2
-                ));
+            // Calculate required candles based on the longest period needed
+            const requiredCandles = Math.max(
+                SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD * 3,
+                SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD * 3,
+                SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD * 3,
+                100 // Minimum candles needed for reliable signals
+            );
+            
+            try {
+                // Always fetch fresh data when initializing indicators
+                const candles = await this.fetchHistoricalData(symbol, requiredCandles);
+                if (!candles || candles.length < requiredCandles) {
+                    throw new Error(`Failed to fetch sufficient historical data for ${symbol}. Need ${requiredCandles} candles, got ${candles ? candles.length : 0}`);
+                }
+
+                // Extract close prices and volumes
+                const closes = candles.map(candle => candle.close);
+                const volumes = candles.map(candle => candle.volume);
+
+                // Calculate initial indicators
+                const smaFast = SMA.calculate({
+                    period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
+                    values: closes
+                });
+
+                const smaSlow = SMA.calculate({
+                    period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+                    values: closes
+                });
+
+                const emaFast = EMA.calculate({
+                    period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
+                    values: closes
+                });
+
+                const emaSlow = EMA.calculate({
+                    period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
+                    values: closes
+                });
+
+                const rsi = RSI.calculate({
+                    period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
+                    values: closes
+                });
+
+                const volumeMA = SMA.calculate({
+                    period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
+                    values: volumes
+                });
+
+                // Verify we have valid indicator values
+                if (!emaFast.length || !emaSlow.length || !rsi.length || !volumeMA.length) {
+                    throw new Error(`Failed to calculate indicators for ${symbol}`);
+                }
+
+                // Store indicators
+                this.indicators.set(symbol, {
+                    emaFast,
+                    emaSlow,
+                    rsi,
+                    volumeMA,
+                    lastUpdate: Date.now()
+                });
+
+                console.log(`✅ Indicators initialized for ${symbol} with ${candles.length} candles`);
+                return true;
+            } finally {
+                // Always remove from initializing set, even if there was an error
+                this.initializingPairs.delete(symbol);
             }
-
-            const history = this.candleHistory.get(symbol);
-            if (!history || history.length === 0) {
-                throw new Error(`No historical data available for ${symbol}`);
-            }
-
-            // Extract close prices and volumes
-            const closes = history.map(candle => parseFloat(candle.close));
-            const volumes = history.map(candle => parseFloat(candle.volume));
-
-            // Calculate initial SMA for EMA
-            const smaFast = SMA.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
-                values: closes
-            });
-
-            const smaSlow = SMA.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
-                values: closes
-            });
-
-            // Calculate EMAs using SMA as initial value
-            const emaFast = EMA.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD,
-                values: closes,
-                initValue: smaFast[0]
-            });
-
-            const emaSlow = EMA.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.EMA.SLOW_PERIOD,
-                values: closes,
-                initValue: smaSlow[0]
-            });
-
-            // Calculate RSI
-            const rsi = RSI.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.RSI.PERIOD,
-                values: closes
-            });
-
-            // Calculate Volume MA
-            const volumeMA = SMA.calculate({
-                period: SIGNALS_CONFIG.ANALYSIS.VOLUME.MA_PERIOD,
-                values: volumes
-            });
-
-            // Store indicators
-            this.indicators.set(symbol, {
-                emaFast,
-                emaSlow,
-                rsi,
-                volumeMA,
-                lastUpdate: Date.now()
-            });
-
-            console.log(`✅ Indicators initialized for ${symbol}`);
-            return true;
         } catch (error) {
             console.error(`Error initializing indicators for ${symbol}:`, error);
             return false;
@@ -268,8 +629,8 @@ export class SignalsService {
             }
 
             // Get recent closes for calculations
-            const closes = history.map(candle => parseFloat(candle.close));
-            const volumes = history.map(candle => parseFloat(candle.volume));
+            const closes = history.map(candle => candle.close);
+            const volumes = history.map(candle => candle.volume);
 
             // Calculate EMAs
             const fastPeriod = SIGNALS_CONFIG.ANALYSIS.EMA.FAST_PERIOD;
@@ -344,42 +705,83 @@ export class SignalsService {
             const currentVolume = parseFloat(candle.volume);
             const volumeRatio = currentVolume / volumeMA;
 
-            // Determine trend
-            const trend = emaFast > emaSlow ? 'bullish' : 'bearish';
+            // Determine trend and indicator states
+            const trend = emaFast > emaSlow ? 'BULLISH' : 'BEARISH';
+            const emaState = emaFast > emaSlow ? 'Price Above EMA' : 'Price Below EMA';
+            const smaState = candle.close > volumeMA ? 'Price Above SMA' : 'Price Below SMA';
+            const macdState = emaFast > emaSlow ? 'Bullish' : 'Bearish';
+
+            // Calculate price range for entry
+            const currentPrice = parseFloat(candle.close);
+            const spread = currentPrice * 0.001; // 0.1% spread
+            const entryLow = (currentPrice - spread).toFixed(4);
+            const entryHigh = (currentPrice + spread).toFixed(4);
+            const entryPrice = currentPrice; // Use middle price for R:R calculations
+
+            // Calculate stop loss and targets based on ATR or fixed percentage
+            const stopLossPercent = 0.01; // 1%
+            const target1Percent = 0.015; // 1.5%
+            const target2Percent = 0.025; // 2.5%
+            const target3Percent = 0.035; // 3.5%
+
+            let stopLoss, targets;
+            if (trend === 'BULLISH') {
+                stopLoss = (currentPrice * (1 - stopLossPercent)).toFixed(4);
+                targets = [
+                    (currentPrice * (1 + target1Percent)).toFixed(4),
+                    (currentPrice * (1 + target2Percent)).toFixed(4),
+                    (currentPrice * (1 + target3Percent)).toFixed(4)
+                ];
+            } else {
+                stopLoss = (currentPrice * (1 + stopLossPercent)).toFixed(4);
+                targets = [
+                    (currentPrice * (1 - target1Percent)).toFixed(4),
+                    (currentPrice * (1 - target2Percent)).toFixed(4),
+                    (currentPrice * (1 - target3Percent)).toFixed(4)
+                ];
+            }
+
+            // Calculate average R:R ratio across all targets
+            const riskPips = Math.abs(entryPrice - parseFloat(stopLoss));
+            const rewardPips = targets.map(t => Math.abs(entryPrice - parseFloat(t)));
+            const avgRewardPips = rewardPips.reduce((a, b) => a + b, 0) / rewardPips.length;
+            const riskRewardRatio = (avgRewardPips / riskPips).toFixed(2);
 
             // Check for buy signal
-            if (trend === 'bullish' && rsi < 30 && volumeRatio > 1.5) {
+            if (trend === 'BULLISH' && rsi < SIGNALS_CONFIG.ANALYSIS.RSI.OVERSOLD && volumeRatio > SIGNALS_CONFIG.ANALYSIS.VOLUME.THRESHOLD) {
                 const signal = {
-                    type: 'BUY',
-                    symbol,
-                    price: parseFloat(candle.close),
-                    time: new Date(candle.time).toISOString(),
-                    trend,
-                    rsi,
-                    emaFast,
-                    emaSlow,
-                    volumeMA,
+                    type: 'LONG',
+                    pair: symbol,
+                    price: `${entryLow} - ${entryHigh}`,
+                    stopLoss,
+                    targets,
+                    timeframe: SIGNALS_CONFIG.TIMEFRAME,
+                    marketTrend: trend,
+                    rsi: rsi.toFixed(2),
+                    macd: macdState,
+                    ema: emaState,
+                    sma: smaState,
                     volumeRatio,
-                    action: 'BUY',
-                    reason: '💹 Buy signal triggered:\n• Bullish trend (Fast EMA > Slow EMA)\n• Oversold (RSI < 30)\n• High volume (>1.5x average)'
+                    riskRewardRatio
                 };
                 await this.sendSignal(signal);
             }
             // Check for sell signal
-            else if (trend === 'bearish' && rsi > 70 && volumeRatio > 1.5) {
+            else if (trend === 'BEARISH' && rsi > SIGNALS_CONFIG.ANALYSIS.RSI.OVERBOUGHT && volumeRatio > SIGNALS_CONFIG.ANALYSIS.VOLUME.THRESHOLD) {
                 const signal = {
-                    type: 'SELL',
-                    symbol,
-                    price: parseFloat(candle.close),
-                    time: new Date(candle.time).toISOString(),
-                    trend,
-                    rsi,
-                    emaFast,
-                    emaSlow,
-                    volumeMA,
+                    type: 'SHORT',
+                    pair: symbol,
+                    price: `${entryLow} - ${entryHigh}`,
+                    stopLoss,
+                    targets,
+                    timeframe: SIGNALS_CONFIG.TIMEFRAME,
+                    marketTrend: trend,
+                    rsi: rsi.toFixed(2),
+                    macd: macdState,
+                    ema: emaState,
+                    sma: smaState,
                     volumeRatio,
-                    action: 'SELL',
-                    reason: '📉 Sell signal triggered:\n• Bearish trend (Fast EMA < Slow EMA)\n• Overbought (RSI > 70)\n• High volume (>1.5x average)'
+                    riskRewardRatio
                 };
                 await this.sendSignal(signal);
             }
@@ -471,121 +873,195 @@ export class SignalsService {
     }
 
     async setupWebSocket() {
-        if (this.ws) {
-            console.log('Closing existing WebSocket connection...');
-            this.ws.close();
-            this.ws = null;
-        }
-
-        console.log('Setting up new WebSocket connection...');
-        const { WebSocket } = await import('ws');
-        this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
-
-        // Wait for connection to be established
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                reject(new Error('WebSocket connection timeout'));
-            }, 10000); // 10 second timeout
-
-            this.ws.on('open', () => {
-                console.log('WebSocket connected to HTX');
-                this.isInitialized = true;
-                this.reconnectAttempts = 0;
-                clearTimeout(timeout);
-                resolve();
-            });
-
-            this.ws.on('error', (error) => {
-                console.error('WebSocket connection error:', error);
-                clearTimeout(timeout);
-                reject(error);
-            });
-        });
-
-        // Set up message handler
-        this.ws.on('message', async (data) => {
-            try {
-                await this.handleWebSocketMessage(data);
-            } catch (error) {
-                console.error('Error handling WebSocket message:', error);
+        try {
+            console.log('\n🔄 Setting up WebSocket connection...');
+            
+            // Close existing connection if any
+            if (this.ws) {
+                this.ws.terminate();
+                this.ws = null;
             }
-        });
-
-        this.ws.on('close', () => {
-            console.log('WebSocket connection closed');
-            this.isInitialized = false;
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                this.reconnectAttempts++;
+            
+            return new Promise((resolve, reject) => {
+                this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
+                
+                this.ws.on('open', () => {
+                    console.log('✅ WebSocket connected');
+                    this.reconnectAttempts = 0;
+                    
+                    // Setup ping interval
+                    this.setupPingInterval();
+                    
+                    resolve();
+                });
+                
+                this.ws.on('message', async (data) => {
+                    await this.handleWebSocketMessage(data);
+                });
+                
+                this.ws.on('close', () => {
+                    console.log('WebSocket disconnected');
+                    this.handleReconnect();
+                });
+                
+                this.ws.on('error', (error) => {
+                    console.error('WebSocket error:', error);
+                    reject(error);
+                });
+                
+                // Set connection timeout
                 setTimeout(() => {
-                    this.setupWebSocket();
-                }, this.reconnectDelay);
-            }
-        });
-
-        this.ws.on('error', (error) => {
-            console.error('WebSocket error:', error);
-        });
-
-        // Start subscribing to markets after successful connection
-        console.log('Connection established, starting market subscriptions...');
-        await this.subscribeToMarkets();
+                    if (this.ws.readyState !== WebSocket.OPEN) {
+                        reject(new Error('WebSocket connection timeout'));
+                    }
+                }, 10000);
+            });
+        } catch (error) {
+            console.error('Error setting up WebSocket:', error);
+            throw error;
+        }
     }
 
-    async subscribeToMarkets() {
-        console.log('Starting market subscriptions...');
-        const BATCH_SIZE = 5; // Process 5 pairs at a time
-        const BATCH_DELAY = 2000; // 2 seconds between batches
-        const SUBSCRIPTION_DELAY = 1000; // 1 second between individual subscriptions
-
-        // Split trading pairs into batches
-        const pairs = [...SIGNALS_CONFIG.TRADING_PAIRS];
-        const batches = [];
-        while (pairs.length > 0) {
-            batches.push(pairs.splice(0, BATCH_SIZE));
+    setupPingInterval() {
+        // Clear existing interval if any
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
         }
-
-        console.log(`Split ${SIGNALS_CONFIG.TRADING_PAIRS.length} pairs into ${batches.length} batches`);
-
-        // Process each batch with delay
-        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
-            const batch = batches[batchIndex];
-            console.log(`Processing batch ${batchIndex + 1}/${batches.length}`);
-
-            // Process each pair in the batch
-            for (const pair of batch) {
-                try {
-                    const formattedSymbol = this.formatSymbol(pair);
-                    const subRequest = {
-                        sub: `market.${formattedSymbol}.kline.1min`,
-                        id: formattedSymbol
-                    };
-                    console.log(`Subscribing to ${formattedSymbol}...`);
-                    this.ws.send(JSON.stringify(subRequest));
-                    
-                    // Delay between individual subscriptions
-                    await new Promise(resolve => setTimeout(resolve, SUBSCRIPTION_DELAY));
-                } catch (error) {
-                    console.error(`Error subscribing to ${pair}:`, error);
-                }
-            }
-
-            // Delay between batches (except for the last batch)
-            if (batchIndex < batches.length - 1) {
-                console.log(`Batch ${batchIndex + 1} complete. Waiting ${BATCH_DELAY}ms before next batch...`);
-                await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
-            }
-        }
-
-        console.log('All market subscriptions completed');
-
-        // Setup ping interval
-        const pingInterval = setInterval(() => {
+        
+        // Setup new ping interval
+        this.pingInterval = setInterval(() => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.ws.send(JSON.stringify({ ping: Date.now() }));
-            } else if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-                clearInterval(pingInterval);
+            } else {
+                clearInterval(this.pingInterval);
+                this.handleReconnect();
             }
         }, 20000);
+    }
+
+    async processBatch(batch, batchNumber, totalBatches) {
+        try {
+            console.log(`Processing batch ${batchNumber}/${totalBatches}`);
+            
+            // Process pairs sequentially to avoid race conditions
+            for (const pair of batch) {
+                try {
+                    // Subscribe to market data
+                    await this.subscribeToSymbol(pair);
+                    
+                    // Small delay between subscriptions
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } catch (error) {
+                    console.error(`Error processing ${pair}:`, error);
+                }
+            }
+            
+            console.log(`Batch ${batchNumber} complete. Waiting 2000ms before next batch...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+            console.error('Error processing batch:', error);
+        }
+    }
+
+    async startBatchProcessing() {
+        try {
+            // Split pairs into batches of 5
+            const BATCH_SIZE = 5;
+            const pairs = [...SIGNALS_CONFIG.TRADING_PAIRS];
+            const batches = [];
+            
+            for (let i = 0; i < pairs.length; i += BATCH_SIZE) {
+                batches.push(pairs.slice(i, i + BATCH_SIZE));
+            }
+            
+            console.log(`Split ${pairs.length} pairs into ${batches.length} batches`);
+            
+            // Process batches sequentially
+            for (let i = 0; i < batches.length; i++) {
+                await this.processBatch(batches[i], i + 1, batches.length);
+            }
+            
+            console.log('\n✅ All pairs processed and subscribed');
+            
+            // Start periodic status updates
+            this.startStatusUpdates();
+        } catch (error) {
+            console.error('Error in batch processing:', error);
+        }
+    }
+
+    async subscribeToSymbol(symbol) {
+        try {
+            const formattedSymbol = this.formatSymbol(symbol);
+            
+            // Check if already subscribed
+            if (this.subscribedPairs.has(formattedSymbol)) {
+                console.log(`Already subscribed to ${symbol}, skipping...`);
+                return;
+            }
+
+            console.log(`Subscribing to ${formattedSymbol}...`);
+            
+            // Initialize indicators first
+            await this.initializeIndicators(symbol);
+            
+            // Subscribe to market data
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                const subscribeMsg = {
+                    sub: SIGNALS_CONFIG.CHANNELS.KLINE(formattedSymbol, '1min'),
+                    id: Date.now()
+                };
+                this.ws.send(JSON.stringify(subscribeMsg));
+                
+                // Mark as subscribed
+                this.subscribedPairs.add(formattedSymbol);
+                
+                // Also subscribe to trade details for volume analysis
+                const tradeSubscribeMsg = {
+                    sub: SIGNALS_CONFIG.CHANNELS.TRADE(formattedSymbol),
+                    id: Date.now()
+                };
+                this.ws.send(JSON.stringify(tradeSubscribeMsg));
+            } else {
+                console.error(`WebSocket not ready for ${symbol}, state:`, this.ws ? this.ws.readyState : 'null');
+            }
+        } catch (error) {
+            console.error(`Error subscribing to ${symbol}:`, error);
+        }
+    }
+
+    async unsubscribeFromSymbol(symbol) {
+        try {
+            const formattedSymbol = this.formatSymbol(symbol);
+            
+            if (!this.subscribedPairs.has(formattedSymbol)) {
+                console.log(`Not subscribed to ${symbol}, skipping unsubscribe...`);
+                return;
+            }
+
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                // Unsubscribe from kline data
+                const unsubscribeMsg = {
+                    unsub: SIGNALS_CONFIG.CHANNELS.KLINE(formattedSymbol, '1min'),
+                    id: Date.now()
+                };
+                this.ws.send(JSON.stringify(unsubscribeMsg));
+
+                // Unsubscribe from trade data
+                const tradeUnsubscribeMsg = {
+                    unsub: SIGNALS_CONFIG.CHANNELS.TRADE(formattedSymbol),
+                    id: Date.now()
+                };
+                this.ws.send(JSON.stringify(tradeUnsubscribeMsg));
+
+                // Remove from subscribed set
+                this.subscribedPairs.delete(formattedSymbol);
+                
+                console.log(`Unsubscribed from ${symbol}`);
+            }
+        } catch (error) {
+            console.error(`Error unsubscribing from ${symbol}:`, error);
+        }
     }
 
     async handleWebSocketMessage(data) {
@@ -621,27 +1097,17 @@ export class SignalsService {
 
             // Process market data
             if (message.ch && message.tick) {
-                const symbol = this.deformatSymbol(message.ch.split('.')[1]);
-                const candle = {
-                    time: message.tick.id * 1000, // Convert to milliseconds
-                    open: message.tick.open,
-                    high: message.tick.high,
-                    low: message.tick.low,
-                    close: message.tick.close,
-                    volume: message.tick.vol
-                };
-
-                this.updateCandleHistory(symbol, candle);
                 this.processedCandles++;
                 
-                // Log processing status every 100 candles
-                if (this.processedCandles % 100 === 0) {
+                // Throttle processing messages
+                const now = Date.now();
+                if (now - this.lastProcessedCandleMessage >= this.processedCandleMessageThrottle) {
                     console.log(`\n🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
+                    this.lastProcessedCandleMessage = now;
                 }
 
-                if (this.isInitialized) {
-                    await this.processCandle(symbol, candle);
-                }
+                // Process the candle data
+                await this.processMarketData(message);
             }
         } catch (error) {
             console.error('Error handling WebSocket message:', error);
@@ -651,12 +1117,60 @@ export class SignalsService {
         }
     }
 
+    async processMarketData(message) {
+        try {
+            const symbol = this.deformatSymbol(message.ch.split('.')[1]);
+            const candle = {
+                time: message.tick.id * 1000, // Convert to milliseconds
+                open: message.tick.open,
+                high: message.tick.high,
+                low: message.tick.low,
+                close: message.tick.close,
+                volume: message.tick.vol
+            };
+
+            this.updateCandleHistory(symbol, candle);
+            
+            // Log processing status every 100 candles
+            if (this.processedCandles % 100 === 0) {
+                console.log(`\n🔄 Processed ${this.processedCandles} candles. Actively monitoring market conditions...`);
+            }
+
+            if (this.isInitialized) {
+                await this.processCandle(symbol, candle);
+            }
+        } catch (error) {
+            console.error('Error processing market data:', error);
+        }
+    }
+
     async sendSignal(signal) {
         try {
-            // Format the signal message
-            const message = this.formatSignalMessage(signal);
+            // Add timestamp and unique ID to signal
+            signal.timestamp = new Date().toISOString();
+            signal.id = `sig_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             
-            // Send to Telegram if service is available
+            // Format the signal message
+            const message = this.formatSignalMessage(signal.symbol, signal.type, signal.price, signal.trend, signal.rsi, signal.volumeRatio, signal.emaFast, signal.emaSlow, signal.volumeMA);
+            
+            // Add to active signals
+            this.trackRecord.activeSignals.push({
+                ...signal,
+                status: 'active',
+                message
+            });
+            this.trackRecord.totalSignals++;
+            await this.saveTrackRecord();
+            
+            // Store in history
+            this.signalHistory.signals.push({
+                ...signal,
+                message,
+                sentAt: signal.timestamp
+            });
+            await this.saveSignalHistory();
+            
+            // Send to Telegram if available
             if (this.telegramService) {
                 await this.telegramService.sendMessage(message);
             } else {
@@ -675,10 +1189,10 @@ export class SignalsService {
             });
 
             // Store the signal
-            if (!this.lastSignals.has(signal.symbol)) {
-                this.lastSignals.set(signal.symbol, []);
+            if (!this.lastSignals.has(signal.pair)) {
+                this.lastSignals.set(signal.pair, []);
             }
-            const signals = this.lastSignals.get(signal.symbol);
+            const signals = this.lastSignals.get(signal.pair);
             signals.push({
                 ...signal,
                 timestamp: Date.now()
@@ -689,7 +1203,7 @@ export class SignalsService {
                 signals.shift();
             }
 
-            console.log(`✅ Signal sent for ${signal.symbol}`);
+            console.log(`✅ Signal sent for ${signal.pair}`);
         } catch (error) {
             console.error('Error sending signal:', error);
         }
@@ -715,65 +1229,59 @@ export class SignalsService {
         }));
     }
 
-    formatSignalMessage(signal) {
+    formatSignalMessage(symbol, type, price, trend, rsi, volumeRatio, emaFast, emaSlow, volumeMA) {
         try {
-            if (!signal || typeof signal !== 'object') {
-                throw new Error('Invalid signal object');
+            // Calculate dynamic stop loss and targets based on trend
+            let stopLoss, targets;
+            if (trend === 'bullish') {
+                stopLoss = (price * (1 - 0.01)).toFixed(4);
+                targets = [
+                    (price * (1 + 0.015)).toFixed(4),
+                    (price * (1 + 0.025)).toFixed(4),
+                    (price * (1 + 0.035)).toFixed(4)
+                ];
+            } else {
+                stopLoss = (price * (1 + 0.01)).toFixed(4);
+                targets = [
+                    (price * (1 - 0.015)).toFixed(4),
+                    (price * (1 - 0.025)).toFixed(4),
+                    (price * (1 - 0.035)).toFixed(4)
+                ];
             }
 
-            const {
-                symbol = 'Unknown',
-                price = 0,
-                trend = 'unknown',
-                rsi = 0,
-                emaFast = 0,
-                emaSlow = 0,
-                volumeMA = 0,
-                volumeRatio = 0,
-                type = 'Unknown',
-                action = 'Unknown',
-                reason = 'No reason provided'
-            } = signal;
+            // Calculate average R:R ratio across all targets
+            const riskPips = Math.abs(price - parseFloat(stopLoss));
+            const rewardPips = targets.map(t => Math.abs(price - parseFloat(t)));
+            const avgRewardPips = rewardPips.reduce((a, b) => a + b, 0) / rewardPips.length;
+            const riskRewardRatio = (avgRewardPips / riskPips).toFixed(2);
 
-            // Calculate targets and stop loss
-            const stopLoss = type === 'BUY' ? price * 0.99 : price * 1.01;
-            const target1 = type === 'BUY' ? price * 1.005 : price * 0.995;
-            const target2 = type === 'BUY' ? price * 1.01 : price * 0.99;
-            const target3 = type === 'BUY' ? price * 1.02 : price * 0.98;
-
-            // Calculate risk/reward ratio
-            const risk = Math.abs(price - stopLoss);
-            const reward = Math.abs(target2 - price);
-            const riskRewardRatio = (reward / risk).toFixed(2);
-
-            // Determine market trend and MACD trend
-            const marketTrend = trend === 'bullish' ? '📈 BULLISH' : '📉 BEARISH';
+            // Determine market trend and indicator states
             const macdTrend = emaFast > emaSlow ? 'Bullish' : 'Bearish';
-            const emaStatus = emaFast > emaSlow ? 'Above' : 'Below';
-            const smaStatus = price > volumeMA ? 'Above' : 'Below';
+            const emaState = emaFast > emaSlow ? 'Above' : 'Below';
+            const smaState = price > volumeMA ? 'Above' : 'Below';
 
             return `
 🟢 SIGNAL ALERT: ${type} ${symbol}
 
 💰 Entry Zone: ${price.toFixed(4)} - ${(price * 1.002).toFixed(4)}
-🛑 Stop Loss: ${stopLoss.toFixed(4)}
+🛑 Stop Loss: ${stopLoss}
 
 🎯 Targets:
-1️⃣ ${target1.toFixed(4)}
-2️⃣ ${target2.toFixed(4)}
-3️⃣ ${target3.toFixed(4)}
+1️⃣ ${targets[0]}
+2️⃣ ${targets[1]}
+3️⃣ ${targets[2]}
 
 📊 Risk/Reward Ratio: 1:${riskRewardRatio}
 
 📈 Market Analysis:
-• Trend: ${marketTrend}
+• Trend: ${trend === 'bullish' ? '📈 BULLISH' : '📉 BEARISH'}
 • RSI: ${rsi.toFixed(2)}
 • Volume Ratio: ${volumeRatio.toFixed(2)}x
 
 ⚡️ Technical Indicators:
 • MACD: ${macdTrend}
-• EMA: Price ${emaStatus} EMA
-• SMA: Price ${smaStatus} SMA
+• EMA: Price ${emaState} EMA
+• SMA: Price ${smaState} SMA
 
 🔄 Trade on HTX:
 ${SIGNALS_CONFIG.REFERRAL_LINK}
@@ -785,6 +1293,39 @@ ${SIGNALS_CONFIG.REFERRAL_LINK}
         } catch (error) {
             console.error('Error formatting signal message:', error);
             return 'Error formatting signal message';
+        }
+    }
+
+    async handleReconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('Max reconnection attempts reached');
+            return;
+        }
+
+        this.reconnectAttempts++;
+        console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+
+        try {
+            // Clear existing subscriptions
+            this.subscribedPairs.clear();
+            
+            // Wait before attempting reconnect
+            await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
+            
+            // Attempt reconnection
+            await this.setupWebSocket();
+            
+            // Resubscribe to all pairs that had indicators initialized
+            const pairs = Array.from(this.indicators.keys());
+            console.log(`Resubscribing to ${pairs.length} pairs...`);
+            
+            for (const pair of pairs) {
+                await this.subscribeToSymbol(pair);
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch (error) {
+            console.error('Reconnection failed:', error);
+            this.handleReconnect(); // Try again
         }
     }
 }

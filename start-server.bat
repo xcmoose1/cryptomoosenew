@@ -1,0 +1,3 @@
+@echo off
+echo Starting CryptoMoose server...
+node server/server.js

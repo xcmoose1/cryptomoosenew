@@ -13,6 +13,9 @@ class TelegramService {
         // Initialize bot with polling disabled (we don't need to receive messages)
         this.bot = new TelegramBot(this.botToken, { polling: false });
         
+        // Initialize HTX referral link
+        this.HTX_REFERRAL = 'https://www.htx.com/invite/en-us/1f?invite_code=5duia223';
+        
         console.log('TelegramService initialized with:');
         console.log('- Bot Token:', this.botToken);
         console.log('- Bot Token Length:', this.botToken.length);
@@ -20,9 +23,10 @@ class TelegramService {
     }
 
     calculateRiskReward(entry, stopLoss, target) {
-        const risk = entry - stopLoss;
-        const reward = target - entry;
-        return { risk, reward, ratio: reward / risk };
+        const risk = Math.abs(entry - stopLoss);
+        const reward = Math.abs(target - entry);
+        const ratio = (reward / risk).toFixed(2);
+        return { risk, reward, ratio };
     }
 
     async sendMessage(message) {
@@ -45,7 +49,22 @@ class TelegramService {
         }
     }
 
-    async sendSignal({ pair, type, price, stopLoss, targets, timeframe, confidence, volume24h, marketTrend }) {
+    async sendSignal({ 
+        pair, 
+        type, 
+        price, 
+        stopLoss, 
+        targets, 
+        timeframe, 
+        confidence, 
+        volume24h, 
+        marketTrend,
+        rsi,
+        macd,
+        ema,
+        sma,
+        volumeRatio 
+    }) {
         const entryPrice = parseFloat(price.split(' - ')[0].replace(',', ''));
         const { risk, reward, ratio } = this.calculateRiskReward(entryPrice, parseFloat(stopLoss.replace(',', '')), parseFloat(targets[0].split(' ')[0].replace(',', '')));
         
@@ -53,36 +72,33 @@ class TelegramService {
         const trendEmoji = marketTrend === 'BULLISH' ? '📈' : marketTrend === 'BEARISH' ? '📉' : '📊';
         
         const signal = `
-${emoji} <b>SIGNAL ALERT: ${type} ${pair}</b> ${timeframe ? `(${timeframe})` : ''}
+${emoji} SIGNAL ALERT: ${type} ${pair} ${timeframe ? `(${timeframe})` : ''}
 
-💰 <b>Entry Zone:</b> ${price}
-🛑 <b>Stop Loss:</b> ${stopLoss}
-    • Risk: ${risk.toFixed(2)}%
-    • Position Size Recommendation: 1-2% of portfolio
+💰 Entry Zone: ${price}
+🛑 Stop Loss: ${stopLoss}
 
-🎯 <b>Targets:</b>
-${targets.map((t, i) => `   ${i + 1}. ${t}`).join('\n')}
+🎯 Targets:
+${targets.map((t, i) => `${i === 0 ? '1️⃣' : i === 1 ? '2️⃣' : '3️⃣'} ${t}`).join('\n')}
 
-📈 <b>Risk/Reward Ratio:</b> 1:${ratio.toFixed(2)}
-⚡️ <b>Signal Confidence:</b> ${confidence}
-${trendEmoji} <b>Market Trend:</b> ${marketTrend}
-💎 <b>24h Volume:</b> $${volume24h}M
+📊 Risk/Reward Ratio: 1:${ratio}
 
-⚠️ <b>Risk Management Tips:</b>
-• Use the recommended position size
-• Consider scaling in/out of positions
-• Move stop loss to break-even after first target
-• Don't chase entry if price moves too far
+📈 Market Analysis:
+• Trend: ${trendEmoji} ${marketTrend}
+• RSI: ${rsi ? rsi.toFixed(2) : 'N/A'}
+• Volume Ratio: ${volumeRatio ? volumeRatio.toFixed(2) : 'N/A'}x
 
-🔗 <b>Trade on HTX:</b>
+⚡️ Technical Indicators:
+• MACD: ${macd || 'N/A'}
+• EMA: ${ema || 'N/A'}
+• SMA: ${sma || 'N/A'}
+
+🔄 Trade on HTX:
 ${this.HTX_REFERRAL}
-• Up to 60% fee discount
-• $10,000 welcome bonus
-• Best liquidity & lowest fees
+• Up to 20% fee discount
+• $5000 sign-up bonus
+• Zero maker fees
 
-⚠️ <i>This is not financial advice. DYOR and trade responsibly.</i>
-#${pair.replace('/', '')} #CryptoSignals #TradingSignals
-`;
+#${pair.replace('/', '')} #CryptoSignals #TradingSignals`;
         
         return this.sendMessage(signal);
     }
