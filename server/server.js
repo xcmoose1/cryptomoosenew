@@ -30,7 +30,6 @@ import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
 import http from 'http';
-import opportunitiesRouter from '../routes/opportunities.js';
 import dailyDigestRouter from '../routes/daily-digest.js';
 import klineRoutes from '../routes/klines.js';
 import advancedTARoutes from '../routes/advanced-ta.js';
@@ -144,7 +143,6 @@ app.use(express.static(path.join(__dirname, '..'), {
 
 // Mount API routes
 app.use('/api/daily-digest', dailyDigestRouter);
-app.use('/api/opportunities', opportunitiesRouter);
 app.use('/api/klines', klineRoutes);
 app.use('/api/advanced-ta', advancedTARoutes);
 app.use('/api/market-intelligence', marketIntelligenceRouter);
