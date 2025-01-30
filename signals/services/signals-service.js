@@ -285,7 +285,11 @@ export class SignalsService {
             
             // Close existing connection if any
             if (this.ws) {
-                this.ws.terminate();
+                try {
+                    this.ws.terminate();
+                } catch (err) {
+                    console.error('Error terminating existing WebSocket:', err);
+                }
                 this.ws = null;
             }
             
@@ -293,57 +297,49 @@ export class SignalsService {
                 try {
                     this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
                     
-                    // Set binary type to arraybuffer for pako inflation
-                    this.ws.binaryType = 'arraybuffer';
-                    
                     this.ws.on('open', () => {
                         console.log('✅ WebSocket connected');
                         this.reconnectAttempts = 0;
-                        this.isInitialized = true;
-                        
-                        // Setup ping interval
                         this.setupPingInterval();
+                        
+                        // Resubscribe to all pairs
+                        if (this.subscribedPairs.size > 0) {
+                            console.log(`Resubscribing to ${this.subscribedPairs.size} pairs...`);
+                            for (const symbol of this.subscribedPairs) {
+                                this.subscribeToSymbol(symbol);
+                            }
+                        }
                         
                         resolve();
                     });
-                    
-                    this.ws.on('message', async (data) => {
-                        try {
-                            await this.handleWebSocketMessage(data);
-                        } catch (error) {
-                            console.error('Error handling WebSocket message:', error);
-                        }
-                    });
-                    
+
                     this.ws.on('close', () => {
                         console.log('WebSocket disconnected');
-                        this.isInitialized = false;
                         if (this.pingInterval) {
                             clearInterval(this.pingInterval);
+                            this.pingInterval = null;
                         }
-                        this.handleReconnect();
+                        
+                        // Only attempt reconnect if we haven't reached max attempts
+                        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                            setTimeout(() => this.handleReconnect(), this.reconnectDelay);
+                        } else {
+                            console.log('Max reconnection attempts reached');
+                        }
                     });
-                    
+
                     this.ws.on('error', (error) => {
                         console.error('WebSocket error:', error);
                         reject(error);
                     });
-                    
-                    // Set connection timeout
-                    setTimeout(() => {
-                        if (!this.isInitialized) {
-                            const error = new Error('WebSocket connection timeout');
-                            this.ws.terminate();
-                            reject(error);
-                        }
-                    }, 10000);
+
                 } catch (error) {
                     console.error('Error creating WebSocket:', error);
                     reject(error);
                 }
             });
         } catch (error) {
-            console.error('Error setting up WebSocket:', error);
+            console.error('Error in setupWebSocket:', error);
             throw error;
         }
     }
@@ -878,46 +874,61 @@ export class SignalsService {
             
             // Close existing connection if any
             if (this.ws) {
-                this.ws.terminate();
+                try {
+                    this.ws.terminate();
+                } catch (err) {
+                    console.error('Error terminating existing WebSocket:', err);
+                }
                 this.ws = null;
             }
             
             return new Promise((resolve, reject) => {
-                this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
-                
-                this.ws.on('open', () => {
-                    console.log('✅ WebSocket connected');
-                    this.reconnectAttempts = 0;
+                try {
+                    this.ws = new WebSocket(SIGNALS_CONFIG.WS_URL);
                     
-                    // Setup ping interval
-                    this.setupPingInterval();
-                    
-                    resolve();
-                });
-                
-                this.ws.on('message', async (data) => {
-                    await this.handleWebSocketMessage(data);
-                });
-                
-                this.ws.on('close', () => {
-                    console.log('WebSocket disconnected');
-                    this.handleReconnect();
-                });
-                
-                this.ws.on('error', (error) => {
-                    console.error('WebSocket error:', error);
+                    this.ws.on('open', () => {
+                        console.log('✅ WebSocket connected');
+                        this.reconnectAttempts = 0;
+                        this.setupPingInterval();
+                        
+                        // Resubscribe to all pairs
+                        if (this.subscribedPairs.size > 0) {
+                            console.log(`Resubscribing to ${this.subscribedPairs.size} pairs...`);
+                            for (const symbol of this.subscribedPairs) {
+                                this.subscribeToSymbol(symbol);
+                            }
+                        }
+                        
+                        resolve();
+                    });
+
+                    this.ws.on('close', () => {
+                        console.log('WebSocket disconnected');
+                        if (this.pingInterval) {
+                            clearInterval(this.pingInterval);
+                            this.pingInterval = null;
+                        }
+                        
+                        // Only attempt reconnect if we haven't reached max attempts
+                        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                            setTimeout(() => this.handleReconnect(), this.reconnectDelay);
+                        } else {
+                            console.log('Max reconnection attempts reached');
+                        }
+                    });
+
+                    this.ws.on('error', (error) => {
+                        console.error('WebSocket error:', error);
+                        reject(error);
+                    });
+
+                } catch (error) {
+                    console.error('Error creating WebSocket:', error);
                     reject(error);
-                });
-                
-                // Set connection timeout
-                setTimeout(() => {
-                    if (this.ws.readyState !== WebSocket.OPEN) {
-                        reject(new Error('WebSocket connection timeout'));
-                    }
-                }, 10000);
+                }
             });
         } catch (error) {
-            console.error('Error setting up WebSocket:', error);
+            console.error('Error in setupWebSocket:', error);
             throw error;
         }
     }
@@ -1261,35 +1272,17 @@ export class SignalsService {
     }
 
     async handleReconnect() {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error('Max reconnection attempts reached');
-            return;
-        }
-
-        this.reconnectAttempts++;
-        console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-
         try {
-            // Clear existing subscriptions
-            this.subscribedPairs.clear();
-            
-            // Wait before attempting reconnect
-            await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
-            
-            // Attempt reconnection
+            this.reconnectAttempts++;
+            console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
             await this.setupWebSocket();
-            
-            // Resubscribe to all pairs that had indicators initialized
-            const pairs = Array.from(this.indicators.keys());
-            console.log(`Resubscribing to ${pairs.length} pairs...`);
-            
-            for (const pair of pairs) {
-                await this.subscribeToSymbol(pair);
-                await new Promise(resolve => setTimeout(resolve, 500));
-            }
         } catch (error) {
             console.error('Reconnection failed:', error);
-            this.handleReconnect(); // Try again
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                setTimeout(() => this.handleReconnect(), this.reconnectDelay);
+            } else {
+                console.log('Max reconnection attempts reached');
+            }
         }
     }
 }
