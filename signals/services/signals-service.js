@@ -1004,37 +1004,33 @@ export class SignalsService {
     async subscribeToSymbol(symbol) {
         try {
             const formattedSymbol = this.formatSymbol(symbol);
-            
-            // Check if already subscribed
-            if (this.subscribedPairs.has(formattedSymbol)) {
-                console.log(`Already subscribed to ${symbol}, skipping...`);
+            if (!formattedSymbol) {
+                console.error(`Invalid symbol format: ${symbol}`);
                 return;
             }
 
-            console.log(`Subscribing to ${formattedSymbol}...`);
-            
-            // Initialize indicators first
-            await this.initializeIndicators(symbol);
-            
-            // Subscribe to market data
+            // Check if we're already subscribed
+            if (this.subscribedPairs.has(formattedSymbol)) {
+                console.log(`Already subscribed to ${formattedSymbol}, skipping...`);
+                return;
+            }
+
+            // Initialize indicators if not already done
+            if (!this.indicators.has(symbol)) {
+                console.log(`📊 Initializing indicators for ${symbol}...`);
+                await this.initializeIndicators(symbol);
+            }
+
+            const sub = {
+                "sub": `market.${formattedSymbol}.kline.1min`,
+                "id": `${formattedSymbol}`
+            };
+
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                const subscribeMsg = {
-                    sub: SIGNALS_CONFIG.CHANNELS.KLINE(formattedSymbol, '1min'),
-                    id: Date.now()
-                };
-                this.ws.send(JSON.stringify(subscribeMsg));
-                
-                // Mark as subscribed
+                this.ws.send(JSON.stringify(sub));
                 this.subscribedPairs.add(formattedSymbol);
-                
-                // Also subscribe to trade details for volume analysis
-                const tradeSubscribeMsg = {
-                    sub: SIGNALS_CONFIG.CHANNELS.TRADE(formattedSymbol),
-                    id: Date.now()
-                };
-                this.ws.send(JSON.stringify(tradeSubscribeMsg));
             } else {
-                console.error(`WebSocket not ready for ${symbol}, state:`, this.ws ? this.ws.readyState : 'null');
+                console.log(`WebSocket not ready for ${symbol}, state: ${this.ws ? this.ws.readyState : 'null'}`);
             }
         } catch (error) {
             console.error(`Error subscribing to ${symbol}:`, error);
@@ -1053,15 +1049,15 @@ export class SignalsService {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 // Unsubscribe from kline data
                 const unsubscribeMsg = {
-                    unsub: SIGNALS_CONFIG.CHANNELS.KLINE(formattedSymbol, '1min'),
-                    id: Date.now()
+                    unsub: `market.${formattedSymbol}.kline.1min`,
+                    id: `${formattedSymbol}`
                 };
                 this.ws.send(JSON.stringify(unsubscribeMsg));
 
                 // Unsubscribe from trade data
                 const tradeUnsubscribeMsg = {
-                    unsub: SIGNALS_CONFIG.CHANNELS.TRADE(formattedSymbol),
-                    id: Date.now()
+                    unsub: `market.${formattedSymbol}.trade.detail`,
+                    id: `${formattedSymbol}`
                 };
                 this.ws.send(JSON.stringify(tradeUnsubscribeMsg));
 
@@ -1275,6 +1271,10 @@ export class SignalsService {
         try {
             this.reconnectAttempts++;
             console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+            
+            // Clear subscribed pairs before reconnecting
+            this.subscribedPairs.clear();
+            
             await this.setupWebSocket();
         } catch (error) {
             console.error('Reconnection failed:', error);
