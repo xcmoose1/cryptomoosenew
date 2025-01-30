@@ -29,26 +29,18 @@ console.log('TELEGRAM_CHANNEL_ID:', process.env.TELEGRAM_CHANNEL_ID);
 import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
-import fetch from 'node-fetch';
-import axios from 'axios';
 import http from 'http';
 import opportunitiesRouter from '../routes/opportunities.js';
 import dailyDigestRouter from '../routes/daily-digest.js';
 import klineRoutes from '../routes/klines.js';
 import advancedTARoutes from '../routes/advanced-ta.js';
-import gemHunterRouter from '../routes/gem-hunter.js';
-import socialMetricsRouter from '../routes/social-metrics.js';
 import marketIntelligenceRouter from '../routes/market-intelligence.js';
 import indicatorsRouter from '../routes/indicators.js';
-import { getAllOpportunities, fetchIDOCalendar } from '../api/investment-opportunities.js';
-import { getAllRegulatoryData, getHighRiskAlerts } from '../api/regulatory-tracking.js';
 import authRoutes from '../routes/auth.js';
 import userRoutes from '../routes/user.js';
 import aiRoutes from '../routes/ai-insights.js';
-import aiAnalysisRouter from '../routes/ai-analysis.js';
 import { HTXDailyService } from '../services/htx-daily.service.js';
 import signalsRouter from '../signals/routes/signals-routes.js';
-import contentRouter from './routes/content-routes.js';
 import marketOverviewRouter from '../routes/market-overview.js';
 import binanceProxyRouter from '../routes/binance-proxy.js';
 import { WebSocketServer } from 'ws';
@@ -118,24 +110,6 @@ app.get('/healthz', (req, res) => {
     res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// Signals history endpoint
-app.get('/api/signals/history', async (req, res) => {
-    try {
-        if (!signalsService) {
-            throw new Error('Signals service not initialized');
-        }
-        const signals = await signalsService.getHistoricalSignals();
-        res.json({ success: true, signals });
-    } catch (error) {
-        console.error('Error fetching signal history:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to fetch signal history',
-            details: error.message 
-        });
-    }
-});
-
 // Middleware
 app.use(cors({
     origin: ['http://localhost:3000', 'http://127.0.0.1:3000'],
@@ -173,17 +147,13 @@ app.use('/api/daily-digest', dailyDigestRouter);
 app.use('/api/opportunities', opportunitiesRouter);
 app.use('/api/klines', klineRoutes);
 app.use('/api/advanced-ta', advancedTARoutes);
-app.use('/api/gem-hunter', gemHunterRouter);
-app.use('/api/social-metrics', socialMetricsRouter);
 app.use('/api/market-intelligence', marketIntelligenceRouter);
 app.use('/api/indicators', indicatorsRouter);
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/signals', signalsRouter);
-app.use('/api/content', contentRouter);
 app.use('/api/market-overview', marketOverviewRouter);
-app.use('/api/new-ai-analysis', aiAnalysisRouter);
 app.use('/api/binance', binanceProxyRouter);
 
 // Create a separate instance for daily updates
@@ -213,9 +183,9 @@ app.use('/images', express.static(path.join(__dirname, '..', 'images')));
 // Serve section files
 app.use('/sections', express.static(path.join(__dirname, '..', 'sections')));
 
-// Root route handler
+// Main route
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'members.html'));
+    res.sendFile(path.join(__dirname, '..', 'new-ai-insights.html'));
 });
 
 // Daily digest route

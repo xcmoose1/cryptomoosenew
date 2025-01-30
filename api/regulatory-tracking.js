@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-import fetch from 'node-fetch';
 
 dotenv.config();
 
@@ -24,42 +23,6 @@ async function fetchWithCache(key, fetchFunction) {
         timestamp: now
     };
     return data;
-}
-
-// Legal Risk Data using CoinGecko's market data
-async function fetchRiskData() {
-    try {
-        // Get market data from CoinGecko
-        const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&sparkline=false&price_change_percentage=24h');
-        const data = await response.json();
-        
-        // Process and categorize risks based on price volatility and market cap
-        return data.map(coin => {
-            const volatility = Math.abs(coin.price_change_percentage_24h);
-            const marketCap = coin.market_cap;
-            
-            // Define risk levels
-            let riskLevel = 'low';
-            if (volatility > 20 || marketCap < 100000000) { // High volatility or small market cap
-                riskLevel = 'high';
-            } else if (volatility > 10 || marketCap < 1000000000) { // Medium volatility or medium market cap
-                riskLevel = 'medium';
-            }
-
-            return {
-                entity: coin.name,
-                symbol: coin.symbol.toUpperCase(),
-                riskLevel,
-                marketCap,
-                volatility,
-                lastUpdated: coin.last_updated,
-                description: `${coin.name} shows ${volatility.toFixed(2)}% 24h volatility with $${(marketCap/1000000).toFixed(2)}M market cap`
-            };
-        });
-    } catch (error) {
-        console.error('Error fetching risk data:', error);
-        return [];
-    }
 }
 
 // Compliance Status Data using exchange API status pages
@@ -139,37 +102,53 @@ async function fetchTaxData() {
     ];
 }
 
-// Combined regulatory data fetch
-async function getAllRegulatoryData() {
+// Regulatory tracking and risk assessment
+async function getRegulatoryData() {
     try {
-        const [risks, compliance, tax] = await Promise.all([
-            fetchWithCache('risks', fetchRiskData),
+        // Implement your preferred data source here
+        return [];
+    } catch (error) {
+        console.error('Error fetching regulatory data:', error);
+        return [];
+    }
+}
+
+async function getHighRiskAlerts() {
+    try {
+        // Implement your preferred data source here
+        return [];
+    } catch (error) {
+        console.error('Error fetching risk alerts:', error);
+        return [];
+    }
+}
+
+export async function getAllRegulatoryData() {
+    try {
+        const [regulatoryData, riskAlerts, compliance, tax] = await Promise.all([
+            getRegulatoryData(),
+            getHighRiskAlerts(),
             fetchWithCache('compliance', fetchComplianceData),
             fetchWithCache('tax', fetchTaxData)
         ]);
 
         return {
-            risks,
+            regulatoryData,
+            riskAlerts,
             compliance,
             tax,
             timestamp: Date.now()
         };
     } catch (error) {
-        console.error('Error fetching regulatory data:', error);
-        throw error;
+        console.error('Error fetching all regulatory data:', error);
+        return {
+            regulatoryData: [],
+            riskAlerts: [],
+            compliance: [],
+            tax: [],
+            timestamp: Date.now()
+        };
     }
 }
 
-// Helper function to get high-risk alerts
-async function getHighRiskAlerts() {
-    const risks = await fetchWithCache('risks', fetchRiskData);
-    return risks.filter(risk => risk.riskLevel === 'high');
-}
-
-export { 
-    getAllRegulatoryData, 
-    fetchRiskData, 
-    fetchComplianceData, 
-    fetchTaxData,
-    getHighRiskAlerts 
-};
+export { getHighRiskAlerts };
